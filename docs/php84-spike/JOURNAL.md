@@ -639,3 +639,58 @@ All under `docs/php84-spike/confirm/`.
   as the scanner's own README warns; the version policy is the tie-breaker.
 - The vulnerable twin is built on demand for the demonstration and is never deployed. No app code
   or upgrade changed; this is additive tooling.
+
+## Session 5 — direct OOM-evidence capture (2026-10-27, 08:10Z → 08:25Z)
+
+Goal: make Layer 2 capture the actual out-of-memory event, not just the scanner's differential
+inference. Wired into `confirm-php2shell.sh --active` + new `confirm/OOM-EVIDENCE.md`.
+
+Housekeeping: the container's local `spike/php84` had diverged from origin (identical trees, fresh
+SHAs back to the base — a re-clone artifact). `git diff HEAD origin/spike/php84` was empty, so
+`git reset --hard origin/spike/php84` before starting; no content lost.
+
+#### 7.1 Evidence capture in `--active` — 08:20Z
+- `start_probe` now starts the probe container with `--memory 1g` and
+  `-d log_errors=On -d display_errors=On -d error_log=/evidence/php-error.log`, `/evidence`
+  bind-mounted writable. After the scanner's probe suite (reused unchanged — no new payload code),
+  the wrapper captures, before teardown: the container memory high-water mark, `docker logs`
+  (stderr), `docker inspect` state, and a liveness curl; then greps `error_log`/stderr for
+  `Allowed memory size of <N> bytes exhausted`. New `oom_evidence` block in the result JSON.
+  Verdict and exit codes unchanged (version policy authoritative).
+- Failure 7.1a: the first metrics approach polled `docker stats --no-stream` in a background loop
+  → `mem_peak: n/a`. Root cause: `docker stats --no-stream` has ~1 s latency and the OOM is
+  sub-second, so the sampler was killed before its first sample returned. Fix: read the kernel's
+  own high-water mark `/sys/fs/cgroup/memory/memory.max_usage_in_bytes` (cgroup v1 inside the
+  container here, even though the host is v2) once, before teardown — race-free. A single
+  `docker stats --no-stream` snapshot is kept as a supplementary line.
+- Failure 7.1b: a combined one-liner with `docker rm` + an inline `sh -c` was blocked by a safety
+  check. Fix: split into simple commands; the helpers use `docker exec <ct> cat <path>` (no `sh -c`).
+- Category: security-verification / tooling. Time: ~10 min.
+
+#### 7.2 Measured A/B (the evidence) — 08:21Z
+- `PHP_IMAGE=morgue-php:vuln … --active --i-understand-this-crashes-workers`:
+  memory peak **530 MiB (52% of the 1g container)**; captured
+  `PHP Fatal error:  Allowed memory size of 536870912 bytes exhausted (tried to allocate 4096
+  bytes) in Unknown on line 0`; scanner VULNERABLE (in-band fatal while parsing); exit 1.
+- `morgue-php:local … --active`: memory peak **57 MiB (6%)**; no memory-exhausted fatal; scanner
+  FIXED; exit 0. The ~10× peak gap + fatal-vs-none is the direct, holistic evidence.
+- Empirical notes (recorded honestly):
+  - With `display_errors=On` the fatal renders in-band AND is logged; the cli-server then **aborts
+    only the offending request and keeps serving** (`served_after` 200). So at 512M under
+    `php -S` the process is not killed — "stops working" is request-level here. Under PHP-FPM /
+    display-off (Session 4) the same exhaustion kills the worker. The doc states both manifestations.
+  - `OOMKilled=false`: this is PHP's own `memory_limit` fatal, not a cgroup kill (container
+    `--memory 1g` sits above PHP's 512M so the PHP layer trips first).
+  - Both builds also log `PHP Warning: … Multipart body parts limit exceeded 1020 … in Unknown`
+    (the pre-existing `max_multipart_body_parts` cap, PHP 8.0+). It fires on both and is NOT the
+    fix — the discriminating signal is strictly the memory-exhausted fatal + the peak.
+  - The 512M run already captures the fatal, so the low-limit (128M) fallback stayed dormant; it
+    remains as insurance for SAPIs/images where a crash bypasses logging.
+- Guardrails unchanged (exit 2 on non-loopback port, `--active` without the confirm flag, missing
+  image); no leftover `morgue-confirm-*` containers; `out/evidence/` reset per run (gitignored).
+- Category: security-verification. Time: ~5 min.
+
+### Caveats (Session 5)
+- The captured OOM is the CVE's precondition (resource exhaustion in the parser), not code
+  execution; the skill proves susceptibility, not RCE.
+- Evidence characterises the event and never overrides the authoritative version verdict.
