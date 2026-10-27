@@ -119,6 +119,9 @@ rules to WI-8 only (see "Running work items with parallel agents").
 - **Example (morgue):** SECURITY-VERIFICATION.md; JOURNAL §6. Trivy: 0 PHP findings on both
   7.1.33 and 8.4.27. Grype on 7.1.33 matched only CVE-2026-109619, because NVD's range for
   CVE-2026-109618 starts at 7.3.0.
+  A runnable form of this work item is the `confirm/` skill (`confirm-php2shell.sh`): Layer 1 is
+  exactly this version policy; an opt-in Layer 2 corroborates with the vendored OOM probe against a
+  disposable local container.
 
 ## WI-3 Static compatibility scan (before changing code)
 
@@ -453,6 +456,8 @@ rules to WI-8 only (see "Running work items with parallel agents").
   against the disclosure date. Rollback: n/a.
 - **Example (morgue):** SECURITY-VERIFICATION.md; JOURNAL §6 (Twig: Trivy 4C/5H → 0; PHP2Shell
   matched on 7.1.33 only through CVE-2026-109619; Trivy blind to PHP in both images).
+  The `confirm/` skill re-runs the version policy (and, opt-in, the active probe) per image, so
+  "fixed image passes, old image fails" is a one-command check (JOURNAL §6.1–6.4).
 
 ## WI-10 Release / deploy readiness
 

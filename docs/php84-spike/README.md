@@ -11,5 +11,9 @@
 | `harness/policy-php-version.sh` | Runtime policy: interpreter version ≥ fixed release |
 | `tool-eval/RESULTS.md` | Measured: what PHPStan 2.3.2 / Rector 2.8.1 would have caught vs the hand fixes |
 | `tool-eval/measure-tools.sh` | Reproduces that measurement (offline analysis, read-only copy of the pre-fix tree) |
+| `confirm/SKILL.md` | Skill: confirm a local image's PHP2Shell susceptibility (CVE-2026-109618/-109619) |
+| `confirm/confirm-php2shell.sh` | Loopback-only: version policy (always) + opt-in disruptive OOM probe |
+| `confirm/vendor/php2shell-scanner/` | Pinned MIT copy of assetnote/php2shell-scanner (the detector) |
 
-Quick start: `docs/php84-spike/harness/run.sh` → `HARNESS GREEN`.
+Quick start: `docs/php84-spike/harness/run.sh` → `HARNESS GREEN`;
+`docs/php84-spike/confirm/confirm-php2shell.sh` → `VERDICT: FIXED`.
