@@ -194,7 +194,7 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   full `E_ALL` (tests load only app code). The harness now also fails on Slim's
   "Slim Application Error" page.
 - **Accepted vendor deprecations (slim/slim 2.6.3, suppressed by the line above)**, enumerated
-  by loading every class under `vendor/slim/slim/Slim` at E_ALL (23 compile-time + 1 runtime):
+  by loading every class under `vendor/slim/slim/Slim` at E_ALL (23 compile-time) plus the 5.15 audit (2 runtime):
   1. `Slim\Helper\Set::{offsetExists,offsetGet,offsetSet,offsetUnset,getIterator,count}` — 8.1
      tentative return types (also covers `Http\Headers`, `Http\Cookies`, which extend Set)
   2. `Slim\Environment::{offsetExists,offsetGet,offsetSet,offsetUnset,getIterator}` — 8.1
