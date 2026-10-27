@@ -213,3 +213,19 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - After the fix: /ping, /, POST /events, DB row PASS; `GET /events/1` → 500 (5.2); phpunit
   fatal (5.3).
 - Category: framework-vendor. Time: 6 min.
+
+#### 5.2 Slack API response read on null → 500 on every event page — 06:03Z
+- Command: harness run after 5.1.
+- Error: `GET /events/1 -> 500`, body "Slim Application Error … Type: ErrorException Code: 2
+  Message: Attempt to read property "ok" on null File: /app/features/slack/lib.php Line: 77",
+  called from `features/slack/views/slack.php:13` (edit page includes every enabled feature).
+- Root cause: the event page calls `https://slack.com/api/channels.list` on every render;
+  with no reachable API (the harness app container has no egress), `json_decode(false)` is
+  null. PHP 8.0 promoted "Trying to get property of non-object" from E_NOTICE to E_WARNING
+  ("Attempt to read property … on null"), and Slim's handler turns it into an exception. The 7.1
+  baseline only passed because its CI could reach slack.com, which answered with JSON
+  (`ok:false`).
+- Fix (app code): `features/slack/lib.php:42,77,126` → `empty($x->ok)` / `!empty($data->ok)`,
+  which is null-safe and silent.
+- After: all 7 smoke checks PASS; phpunit still fatal (5.3).
+- Category: app-code. Time: 4 min.

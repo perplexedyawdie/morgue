@@ -39,7 +39,7 @@ class Slack {
         $userListData = json_decode($apiResult);
 
         $userList = [];
-        if($userListData->ok != true ) {
+        if (empty($userListData->ok)) {
             return $userList;
         }
 
@@ -74,7 +74,7 @@ class Slack {
             // If the API is JSON, use json_decode.
             $data = json_decode($result);
             $channelList = [];
-            if($data->ok == true ) {
+            if (!empty($data->ok)) {
                 foreach ($data->channels as $channelInfo) {
                     $channelId  = $channelInfo->id;
                     $channelName= $channelInfo->name;
@@ -123,7 +123,7 @@ class Slack {
             $data = json_decode($apiResult);
 
             // Set fetch flag to false and continue. If unable to fetch records or has no more data to fetch
-            if($data->ok != true) {
+            if (empty($data->ok)) {
                 $fetch = false;
                 continue;
             }
