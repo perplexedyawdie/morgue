@@ -44,7 +44,7 @@ class Postmortem {
         $action = (isset($event["id"])) ?  self::ACTION_EDIT : self::ACTION_ADD;
 
         if ($action == self::ACTION_ADD) {
-            $now = new DateTime(null, new DateTimeZone('UTC'));
+            $now = new DateTime('now', new DateTimeZone('UTC'));
             $event["created"] = $now->getTimestamp();
         }
 
@@ -556,7 +556,7 @@ class Postmortem {
                 "error" => "Couldn't get connection object."
             );
         }
-        $now = new DateTime(null, new DateTimeZone('UTC'));
+        $now = new DateTime('now', new DateTimeZone('UTC'));
         $sql = "INSERT INTO postmortem_history
                    (postmortem_id, auth_username, action, create_date, summary, why_surprised)
                    VALUES (:pid, :admin, :action, :date, :summary, :why_surprised)";

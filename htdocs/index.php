@@ -131,7 +131,7 @@ $app->get('/', function() use ($app) {
     $content = 'content/frontpage';
     $show_sidebar = true;
 
-    $selected_tags = trim($app->request()->get('tags'));
+    $selected_tags = trim($app->request()->get('tags') ?? '');
     if (strlen($selected_tags) > 0) {
         $selected_tags = explode(",", $selected_tags);
         $selected_tags = array_map('trim', $selected_tags);

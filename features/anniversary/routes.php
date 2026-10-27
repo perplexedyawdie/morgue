@@ -8,7 +8,7 @@ $app->get('/api/anniversary', function () use ($app) {
 	 * JSON boolean if there is an anniversary today or not
 	 */
     $today = gmdate("Y-m-d", time());
-    $get_date = trim($app->request->get('date'));
+    $get_date = trim($app->request->get('date') ?? '');
     if ($get_date) {
         $get_date = gmdate("Y-m-d", strtotime($get_date));
         $today = $get_date;
@@ -35,7 +35,7 @@ $app->get('/anniversary', function () use ($app) {
     $page_title = "Today in Post Mortem History";
     $today = date("Y-m-d", time());
 
-    $get_date = trim($app->request->get('date'));
+    $get_date = trim($app->request->get('date') ?? '');
     if ($get_date) {
         $get_date = date("Y-m-d", strtotime($get_date));
         $today = $get_date;
@@ -87,7 +87,7 @@ $app->get('/anniversary/mail', function () use ($app) {
     $page_title = "Today in Post Mortem History";
     $today = date("Y-m-d", time());
 
-    $get_date = trim($app->request->get('date'));
+    $get_date = trim($app->request->get('date') ?? '');
     if ($get_date) {
         $get_date = date("Y-m-d", strtotime($get_date));
         $today = $get_date;

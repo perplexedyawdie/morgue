@@ -2,7 +2,7 @@
 
 $app->get('/search', function() use ($app) {
         $q = $app->request->get('q');
-        $q = urldecode($q);
+        $q = urldecode($q ?? "");
 
         if($q === null || $q === "" || $q === "\"\""){
             $app->redirect('/');

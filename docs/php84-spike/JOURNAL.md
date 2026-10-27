@@ -401,3 +401,18 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   (`urldecode(null)`) → 5.16.
 - Verified afterwards: `git -C vendor/slim/slim status --short` is empty (vendor restored).
 - Category: tooling. Time: 8 min.
+
+#### 5.16 Null passed to non-nullable string parameters (8.1, predicted P14) — 06:41Z
+- Errors (audit 5.15): `DateTime::__construct(): Passing null to parameter #1 ($datetime) of type
+  string is deprecated` (phplib/Postmortem.php:47 on create, :559 on history), `trim(): Passing null
+  to parameter #1 ($string)` (htdocs/index.php:134 on `GET /` without `?tags`,
+  features/anniversary/routes.php:11,38,90 without `?date`), `urldecode(): Passing null …`
+  (features/search/routes.php:5 without `?q`).
+- Root cause: Slim's `request->get('x')` returns null for an absent parameter; PHP 8.1 deprecates
+  null for internal scalar parameters (7.x coerced it to "" silently). `new DateTime(null)` relied
+  on the same coercion to mean "now".
+- Fix: `new DateTime('now', …)`; `trim($app->request->get('x') ?? '')`; `urldecode($q ?? "")`.
+  Same values as the old coercion.
+- After: `audit-web.sh` → app findings 0, 5xx responses 0 (41 requests); vendor entries are only
+  the accepted Slim list.
+- Category: app-code. Time: 3 min.
