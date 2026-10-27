@@ -442,3 +442,53 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   CVE-2026-109619: the NVD CPE range for CVE-2026-109618 starts at 7.3.0, so EOL 7.1 is silently
   "not affected". Exposure detection for EOL runtimes must be a version policy, not a CVE match.
 - Category: security-verification. Time: 7 min.
+
+## Summary — 2026-10-27T06:23Z
+
+**Outcome: DONE.** `spike/php84` runs morgue on PHP 8.4.27. `harness/run.sh` is green from a
+clean checkout (phpunit 11/11 at E_ALL; DB smoke creates and reads a postmortem; no PHP warnings
+or fatals), `audit-web.sh` is clean over 41 requests at E_ALL, and the security re-verification
+shows no PHP2Shell and no Twig findings.
+
+**Time:** session 2 ran 05:33Z → 06:23Z = **~50 min wall-clock** (plus 5 min of session 1),
+of which ~12 min was waiting on git-source Composer installs. By category: tooling/harness
+~15 min, dependency ~16 min, framework-vendor ~2 min, app-code ~8 min, tests ~3 min,
+security ~7 min.
+
+**Step list:** 1 harness → 2 static scan → 3 Dockerfile 8.4.27 → 4 composer.json + lock (Twig
+removed, sabre/dav 4.7.1, phpunit 11.5.57, merge-plugin 2.1.0, Slim polyfill) → 5.1 Slim
+deprecations accepted by ini → 5.2 Slack null → 5.3–5.6 PHPUnit 11 → 5.7–5.8 dynamic properties →
+5.9–5.11 8.x deprecations → 5.12 mcrypt constants → 5.13–5.14 missing-id 500s → 5.15 web audit
+tool → 5.16 null-to-string → 5.17 clean re-run → 6 security re-verify.
+
+**Top surprises**
+1. Slim 2's error handler turns E_DEPRECATED into exceptions, so vendor deprecations are fatal,
+   and the sanctioned suppression (`~E_DEPRECATED`) also hides app deprecations. A patched-handler
+   audit found 7 that tests and smoke never showed (5.1, 5.15, 5.16).
+2. Scanners: Trivy is blind to source-built PHP (identical "clean" for 7.1.33 and 8.4.27). Grype
+   via Syft's binary classifier sees it, but NVD's range for CVE-2026-109618 starts at 7.3.0, so
+   EOL 7.1 matches only CVE-2026-109619. Only a runtime version policy is reliable (6).
+3. Composer 2.10 refuses to resolve versions with security advisories (Twig 1.x, PHPUnit 6) before
+   PHP compatibility is even considered (3).
+4. Egress/toolchain: GitHub API zipballs refused while git clones are allowed → `--prefer-source`;
+   merge plugin needs a second resolve and ignores `--prefer-source` in its nested update; Docker
+   Hub 429s (3, 4).
+5. PHP 8 changed the default `error_reporting` to E_ALL and promoted missing-key /
+   offset-on-false / property-on-null to warnings. Unknown event ids went from 404 to 500, and
+   an offline Slack call 500'd every event page. Both were invisible to static tools (5.2, 5.13, 5.14).
+
+**Left unresolved / follow-ups**
+- slim/slim 2.6.3 is still the framework (abandoned, no PHP 8 release). 25 vendor deprecations
+  are suppressed by `docker/php/morgue.ini`, and the polyfill is a bridge. Replace Slim 2
+  (Slim 4 or similar) and then drop the ini exclusion and `phplib/compat/`.
+- Cookie "encryption" is a no-op (it already was on 7.1: no ext/mcrypt) and the cookie secret
+  `PMS_R_US` is hard-coded in `htdocs/index.php`. Session cookies rely on Slim's HMAC only. This is a
+  security follow-up, not fixed here (behaviour kept identical).
+- Not exercised: `POST /upload/:id` (WebDAV through sabre/dav 4.7.1; only `Sabre\DAV\Client`
+  construction verified), JIRA/Slack against real APIs, the irc feature (disabled in example
+  config), calendar JS, anniversary mail cron. CurlClient tests (httpbin.org) are still excluded,
+  so they were not run on 8.4.
+- Only the README dev server (`php -S`) was tested. Apache/FPM production config (php.ini parity,
+  `error_reporting`) must be set to match `docker/php/morgue.ini` at deploy time.
+- Base image OS findings (Debian 13: Trivy 2 critical / 118 high, none PHP) are a separate
+  base-image patching item.
