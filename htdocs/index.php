@@ -22,11 +22,11 @@ if (!$config) {
 	include '../views/page.php';
 	die();
 }
+// Slim 2 only encrypts cookies when ext/mcrypt is loaded (removed in PHP 7.2), so
+// 'cookies.encrypt' is a no-op; cipher settings are left at Slim's defaults.
 $app = new \Slim\Slim(array(
     'cookies.encrypt' => true,
     'cookies.secret_key' => 'PMS_R_US',
-    'cookies.cipher' => MCRYPT_RIJNDAEL_256,
-    'cookies.cipher_mode' => MCRYPT_MODE_CBC,
 ));
 $app->config('debug', true);
 

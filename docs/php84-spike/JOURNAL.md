@@ -340,3 +340,13 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - Fix: `"<h3>${subject}</h3>"` → `"<h3>{$subject}</h3>"`. Identical output.
 - Verification: `php -d error_reporting=E_ALL -l` → clean.
 - Category: app-code. Time: 1 min.
+
+#### 5.12 App's own mcrypt constants (predicted P1) — 06:22Z
+- Finding: `htdocs/index.php:28-29` passed `MCRYPT_RIJNDAEL_256` / `MCRYPT_MODE_CBC` to Slim. Not
+  failing any more (the polyfill from step 4 defines them), but the app should not depend on a
+  removed extension's constants.
+- Fix: removed the two `cookies.cipher*` settings (Slim's defaults are the same values) and
+  documented that `cookies.encrypt` is a no-op without ext/mcrypt (it already was on 7.1).
+- After: **HARNESS GREEN** — /ping, /, POST /events → /events/1, GET /events/1 shows the title,
+  row persisted, no PHP error text, PHP log clean; `OK (11 tests, 16 assertions)` at E_ALL.
+- Category: app-code. Time: 2 min.
