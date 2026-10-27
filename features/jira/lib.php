@@ -176,6 +176,13 @@ class Jira {
 
 class JiraClient {
 
+    private $curl_client;
+    private $jira_base_url;
+    private $username;
+    private $password;
+    private $proxy;
+    private $additional_fields;
+
     function __construct($curl_client, $config = null) {
         $this->curl_client = $curl_client;
         $config = is_null($config) ? Configuration::get_configuration("jira") : $config;

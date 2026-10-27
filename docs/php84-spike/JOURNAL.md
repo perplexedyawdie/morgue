@@ -283,3 +283,16 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - After: `OK, but there were issues! Tests: 11, Assertions: 16, Deprecations: 6` — the 11 tests
   match the 7.1 baseline count; remaining deprecations are app code (5.7, 5.8).
 - Category: tests. Time: 3 min.
+
+#### 5.7 JiraClient dynamic properties (8.2) — 06:13Z
+- Error (phpunit, E_ALL): `Creation of dynamic property JiraClient::$curl_client is deprecated`
+  (+ `$jira_base_url`, `$username`, `$password`, `$proxy`, `$additional_fields`), features/jira/lib.php:180-190.
+- Root cause: PHP 8.2 deprecates writing undeclared properties.
+- Sweep: because the web path runs with `~E_DEPRECATED` (5.1), a tokenizer script
+  (`$this->x =` writes vs declared properties, every class in htdocs/phplib/features/views/tests)
+  was run to find the ones no test reaches: also `Uploader_Webdav::$client`
+  (features/upload/lib/webdav.php:38) and 9 properties of `Calendar` (features/calendar/lib.php:8-20,
+  rendered on every event page) → 5.8.
+- Fix: declared the six as `private` in `JiraClient` (grep: nothing outside the class reads them).
+- After: `OK (11 tests, 16 assertions)`; one compile-time deprecation left on stderr (5.9).
+- Category: app-code. Time: 4 min.
