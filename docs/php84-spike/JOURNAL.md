@@ -425,3 +425,20 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   16 assertions)` at E_ALL. Web audit (`audit-web.sh`) separately: 41 requests, 0 × 5xx, 0 app
   findings.
 - Category: tooling. Time: 7 min (unattended; mostly the source install).
+
+### 6. Re-verify (runtime + security) — 06:18Z → 06:25Z
+- `php -v` in the image: `PHP 8.4.27 (cli) (built: Oct 21 2026 15:53:07) (NTS)`. Runtime policy
+  script `docs/php84-spike/harness/policy-php-version.sh`: PASS for `morgue-php:local`, FAIL for
+  `php:7.1-cli` (7.1.33). The harness runs the same check first.
+- Syft 1.55.0 / Grype 0.121.0 (DB 2026-10-26) / Trivy 0.76.1 on before/after images and lockfiles;
+  full table in `docs/php84-spike/SECURITY-VERIFICATION.md`. Headline: after = 0 PHP2Shell and 0 Twig
+  findings (Twig before: Trivy 4 critical / 5 high / 6 medium / 1 unknown; Grype 1/3/5/5).
+- Failure 6a: `grype db status` → "database does not exist" right after a successful
+  `db update`. Root cause: the image's cache dir is `/.cache/grype`, not `/root/.cache/grype`, so
+  the volume was mounted in the wrong place. Fix: mount at `/.cache/grype`. Category: tooling.
+- Finding 6b: Trivy reports no PHP at all in either image (source-built PHP has no dpkg record),
+  so its PHP2Shell verdict is the same "clean" for 7.1.33 and 8.4.27.
+- Finding 6c: Grype + Syft's binary classifier DO see `php-cli 7.1.33`, but match only
+  CVE-2026-109619: the NVD CPE range for CVE-2026-109618 starts at 7.3.0, so EOL 7.1 is silently
+  "not affected". Exposure detection for EOL runtimes must be a version policy, not a CVE match.
+- Category: security-verification. Time: 7 min.
