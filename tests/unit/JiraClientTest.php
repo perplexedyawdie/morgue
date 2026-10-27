@@ -4,15 +4,20 @@ require_once("features/jira/lib.php");
 require_once("phplib/CurlClient.php");
 require_once("phplib/Configuration.php");
 
+use PHPUnit\Framework\Attributes\DataProvider;
+
 class JiraClientTest extends \PHPUnit\Framework\TestCase {
     const JIRA_BASE_URL = "https://jira.foo.com";
     const JIRA_USERNAME = 'jira';
     const JIRA_PASSWORD = 'credentials';
     const JIRA_PROXY    = '';
 
+    private $curl_client;
+    private $jira_client;
+
     protected function setUp(): void {
         // create a mock curl client
-        $this->curl_client = $this->createMock('CurlClient', array('get'));
+        $this->curl_client = $this->createMock('CurlClient');
         $this->jira_client = new JiraClient(
             $this->curl_client, array(
                 "baseurl" => self::JIRA_BASE_URL,
@@ -40,7 +45,7 @@ class JiraClientTest extends \PHPUnit\Framework\TestCase {
              ->expects($this->once())
              ->method('get')
              ->with($this->equalTo($expected_url), $this->equalTo($expected_params), $this->equalTo($expected_creds))
-             ->will($this->returnValue('{"json": "response"}'));
+             ->willReturn('{"json": "response"}');
 
         $fields = array('x', 'y' ,'z');
         $jira_response = $this->jira_client->getJiraApiResponse(array("FOO-123", "BAR-456", "BAZ-7"), $fields);
@@ -59,7 +64,7 @@ class JiraClientTest extends \PHPUnit\Framework\TestCase {
     }
 
 
-    public function provideTicketsFieldsRequirements() {
+    public static function provideTicketsFieldsRequirements() {
         return array(
             array( array('Foo' => 'foo'), array('Foo' => 'X')), # simple field
             array( array('BaZ' => 'baz'), array('BaZ' => 'Z')), # nested field
@@ -68,9 +73,7 @@ class JiraClientTest extends \PHPUnit\Framework\TestCase {
         );
     }
 
-    /**
-      * @dataProvider provideTicketsFieldsRequirements
-      */
+    #[DataProvider('provideTicketsFieldsRequirements')]
     public function test_unpackTicketInfo($fields, $expected) {
         $ticket_info = array(
             'key' => 'ABC',

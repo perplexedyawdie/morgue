@@ -5,6 +5,8 @@ require_once("phplib/CurlClient.php");
 
 class CurlClientTest extends \PHPUnit\Framework\TestCase {
 
+    private $curl_client;
+
     protected function setUp(): void {
         $this->curl_client = new CurlClient();
     }

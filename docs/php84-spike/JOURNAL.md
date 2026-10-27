@@ -263,3 +263,23 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - Fix: `features/jira/lib.php:223,225` → `implode('","', $jira_key_input)`, `implode(',', $fields)`.
 - After: `Tests: 7, Assertions: 12, Errors: 1, Deprecations: 8, PHPUnit Deprecations: 2`.
 - Category: app-code. Time: 2 min.
+
+#### 5.6 PHPUnit 11 API: static data providers, attributes, `willReturn`, declared props — 06:10Z
+- Command: `vendor/bin/phpunit --include-path=phplib --filter '/^(?!.*CurlClient)/'
+  --display-deprecations --display-phpunit-deprecations tests/unit/` (at E_ALL).
+- Errors: `The data provider specified for JiraClientTest::test_unpackTicketInfo is invalid. Data
+  Provider method JiraClientTest::provideTicketsFieldsRequirements() is not static` (error, so
+  its 4 cases never ran); `Metadata found in doc-comment … deprecated and will no longer be
+  supported in PHPUnit 12`; `returnValue() is deprecated and will be removed in PHPUnit 12`;
+  `Creation of dynamic property JiraClientTest::$curl_client / $jira_client is deprecated` (8.2).
+- Root cause: PHPUnit 10 requires static providers and moved metadata to attributes; PHP 8.2
+  deprecates undeclared properties, including on test classes.
+- Fix (tests only): `JiraClientTest.php` → `public static function provideTicketsFieldsRequirements()`,
+  `#[DataProvider('provideTicketsFieldsRequirements')]` instead of `@dataProvider`,
+  `->willReturn(...)` instead of `->will($this->returnValue(...))`, `createMock('CurlClient')`
+  (the 2nd arg was the PHPUnit 5 `setMethods` list, ignored since 6), declared
+  `private $curl_client, $jira_client`; `CurlClientTest.php` → declared `private $curl_client`.
+  Done to PHPUnit 12-ready level so the next major isn't another migration.
+- After: `OK, but there were issues! Tests: 11, Assertions: 16, Deprecations: 6` — the 11 tests
+  match the 7.1 baseline count; remaining deprecations are app code (5.7, 5.8).
+- Category: tests. Time: 3 min.
