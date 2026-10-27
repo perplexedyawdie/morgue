@@ -10,6 +10,19 @@ Entry format: commands → exact error → root cause → fix → category
 
 ## Environment
 
+### Session 2 (this run, from entry 1 on) — cloud sandbox
+- Host: Ubuntu 24.04.5 LTS, linux/amd64 cloud container (claude.ai/code). Root, no sudo needed.
+- Host PHP: 8.3.6 (Ubuntu package) and Composer 2.8.12 exist on the host but are NOT used
+  for the upgrade itself (wrong minor). Everything runs in containers.
+- Docker Engine 29.9.2: client installed, daemon not running at start; started by hand with
+  `dockerd &` (overlayfs, cgroup v1). Outbound traffic goes through an HTTPS egress proxy
+  with its own CA (`/root/.ccr/ca-bundle.crt`); containers must use `--network host` plus the
+  proxy env and CA to reach the network.
+- Images: `php:8.4.27-cli` (digest sha256:debadc2e36b8…, `PHP 8.4.27 (cli) (built: Oct 21 2026)`),
+  `mariadb:10.4`. Docker Hub returned `429 Too Many Requests` on anonymous pulls twice
+  (mariadb:10.4 on first try, composer:2); retrying after ~20 s worked for mariadb.
+
+### Session 1 (entry 0 only) — local
 - Host: macOS 27.0 (arm64). No Docker, no native PHP or MySQL on the host.
 - Container engine: Podman 6.0.2 (client and server, libkrun machine, linux/arm64).
   Used as a drop-in for `docker` (`podman build`, `podman run`).
