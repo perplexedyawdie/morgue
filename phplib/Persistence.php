@@ -165,6 +165,9 @@ class Persistence {
             $stmt = $conn->prepare($sql);
             $stmt->execute(array('id' => $postmortem_id));
             $postmortem = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($postmortem === false) {
+                return array("id" => null, "error" => "Postmortem not found.");
+            }
             return $postmortem;
 
         } catch(PDOException $e) {

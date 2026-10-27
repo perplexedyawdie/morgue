@@ -350,3 +350,20 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - After: **HARNESS GREEN** — /ping, /, POST /events → /events/1, GET /events/1 shows the title,
   row persisted, no PHP error text, PHP log clean; `OK (11 tests, 16 assertions)` at E_ALL.
 - Category: app-code. Time: 2 min.
+
+#### 5.13 Unknown event id → 500 instead of 404 (found by crawling every GET route) — 06:27Z
+- Command: harness with `KEEP=1`, then `curl` over all 27 GET routes from `htdocs/index.php` and
+  `features/*/routes.php` with a real id (1) and a missing id (999), grepping for Slim error pages.
+  All real-id routes → 200/302 (`/events/1/channels` 404 is the disabled irc feature).
+- Error: `GET /events/999` → 500 "ErrorException Code: 2 Message: Trying to access array offset
+  on false File: /app/phplib/Postmortem.php Line: 85".
+- Root cause: `Persistence::get_postmortem()` returns `PDOStatement::fetch()`'s `false` when no
+  row exists; callers do `$event["id"]`. Array access on bool was silent until 7.4 (notice) and
+  is an E_WARNING since 8.0, which Slim turns into an exception. Second factor: PHP 8 changed the
+  built-in default `error_reporting` (no php.ini, as in the docker images) from
+  `E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED` to `E_ALL`, so even the 7.4-era notices would now
+  reach Slim's handler.
+- Fix: `get_postmortem()` returns its documented error shape `array("id" => null, "error" => …)`
+  when the row is missing. Both callers already handle `id === null`.
+- After: `/events/999`, `/events/999/{summary,tldr,why_surprised}` → 404.
+- Category: app-code. Time: 5 min.
