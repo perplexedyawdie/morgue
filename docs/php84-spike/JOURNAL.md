@@ -202,6 +202,8 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   4. `Slim\Middleware\Flash::{offsetExists,offsetGet,offsetSet,offsetUnset,getIterator,count}` — 8.1
   5. `Slim\Middleware\SessionCookie::call()` line 94: `session_set_save_handler()` with
      individual callbacks — 8.4 (runtime, every request)
+  6. `Slim\Http\Util::parseCookieHeader()`-path, Util.php:401: `rtrim(null)` — 8.1 null to
+     non-nullable internal parameter (runtime, every request; found later by the 5.15 audit)
 - Side effect to know about: with Slim's handler in place, `~E_DEPRECATED` also silences app
   deprecations at runtime in the web path (the handler returns without logging). App
   deprecations are therefore hunted with phpunit at E_ALL, `php -l` and the static scan instead.
@@ -381,3 +383,21 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - After: `/events/999/lock`, `/history/999/999`, `/history/1/999` → 404; `/events/1/lock` → 200
   `{"status":0,"modifier":"morgue_user"}`; `/history/1/1` → 200.
 - Category: app-code. Time: 4 min.
+
+#### 5.15 Web-path deprecation audit (tool) — 06:37Z
+- Problem: with the accepted runtime config, Slim's handler swallows *all* deprecations on the
+  web path, app ones included (5.1), and at plain E_ALL Slim's own deprecations kill every
+  request. So nothing so far had looked for app deprecations in request handlers.
+- Added `docs/php84-spike/harness/audit-web.sh`: runs `run.sh` with `KEEP=1`, temporarily patches
+  the local `vendor/slim/slim/Slim/Slim.php::handleErrors()` to `error_log()` deprecations and
+  continue, serves at full `E_ALL`, exercises 41 requests (every GET route with real and missing
+  ids, and every write route: POST/PUT/DELETE for events, history, tags, forum links, images,
+  slack channels, tickets, timezone, delete + undelete), restores the vendor file on exit (trap),
+  and fails on any PHP log line outside `vendor/` or any 5xx.
+- First audit result: 0 × 5xx; vendor entries = the accepted list (+ item 6 above, newly seen);
+  **7 app findings**, all PHP 8.1 "Passing null to parameter #1 ($string|$datetime) of type string
+  is deprecated": `phplib/Postmortem.php:47,559` (`new DateTime(null)`), `htdocs/index.php:134`,
+  `features/anniversary/routes.php:11,38,90` (`trim(null)`), `features/search/routes.php:5`
+  (`urldecode(null)`) → 5.16.
+- Verified afterwards: `git -C vendor/slim/slim status --short` is empty (vendor restored).
+- Category: tooling. Time: 8 min.
