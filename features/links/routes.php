@@ -35,7 +35,7 @@ $app->post('/events/:id/forum_links', function($id) use ($app) {
 });
 $app->get('/events/:id/forum_links/:forum_link', function($id, $forum_link) use ($app) {
     header("Content-Type: application/json");
-    $forum_link = Links::get_forum_link($img); //need to find this function
+    $forum_link = Links::get_forum_link($forum_link);
     if ($forum_link["status"] == Links::ERROR) {
         $app->response->status(404);
         return;

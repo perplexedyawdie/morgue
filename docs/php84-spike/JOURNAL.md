@@ -492,3 +492,27 @@ tool → 5.16 null-to-string → 5.17 clean re-run → 6 security re-verify.
   `error_reporting`) must be set to match `docker/php/morgue.ini` at deploy time.
 - Base image OS findings (Debian 13: Trivy 2 critical / 118 high, none PHP) are a separate
   base-image patching item.
+
+## Session 3 — measuring Rector / PHPStan against the hand-made fixes (2026-10-27, from 06:30Z)
+
+Goal: measure which of the step-5 findings two static tools (named by
+netresearch/php-modernization-skill) would have caught on the pre-fix tree `2314b75`, and fold
+the result into the runbook. Tools ran in `morgue-php:local` (PHP 8.4.27) with `--network none`,
+against a read-only export of `2314b75` plus the identical vendor/ (composer.json/lock unchanged).
+
+#### 5.18 Undefined `$img` in the single-forum-link route (found by PHPStan level 0) — 06:47Z
+- Found by: PHPStan 2.3.2 level 0 on the pre-fix tree, `features/links/routes.php:38 [variable.undefined]
+  Undefined variable: $img`. My route crawl (5.13) and web audit (5.15) never requested
+  `GET /events/:id/forum_links/:forum_link`, so neither saw it.
+- Error (reproduced on the current branch): `GET /events/1/forum_links/1` → 500 "Slim Application
+  Error … Message: Undefined variable $img File: /app/features/links/routes.php Line: 38".
+- Root cause: copy-paste bug from the images route (`get_forum_link($img)` instead of the route
+  parameter `$forum_link`). On 7.1 the undefined variable was an E_NOTICE, which the default
+  error_reporting filtered out, so the call ran with null. On 8.x it is an E_WARNING, and Slim's handler
+  turns it into an exception.
+- Fix: `Links::get_forum_link($forum_link)`. After: `GET /events/1/forum_links/1` → 404, as on 7.1.
+- Not fixed (pre-existing, not PHP-version related): it still returns 404 for an existing link,
+  because `Persistence::get_association_by_id()` (phplib/Persistence.php:416) builds
+  `SELECT … FROM <table>` with no `WHERE id = :id` but binds `:id`, so PDO throws and the function
+  returns ERROR. That was the same on 7.1; it's listed as a follow-up.
+- Category: app-code. Time: 4 min.
