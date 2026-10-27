@@ -33,9 +33,11 @@ You can also join `#morgue` on Freenode IRC if you have questions.
 ## Setup
 
 ### Requirements
-- PHP 7.0 or higher
+- PHP 8.4.27 or higher within 8.4 (8.4.27 is the first 8.4 release that fixes
+  PHP2Shell, CVE-2026-109618 / CVE-2026-109619); the repo `Dockerfile` pins `php:8.4.27-cli`
+- Composer 2
 - MySQL 5.5 or higher
-- PHP MySQL driver
+- PHP MySQL driver (`pdo_mysql`)
 - Apache
 - mod_rewrite
 
@@ -55,11 +57,14 @@ custom features to your Morgue installation.
 ### Composer
 Morgue relies on the [Slim Framework](http://www.slimframework.com/), a dependency that can be easily managed by Composer.
 Directions to install composer can be found on [here][2]).
-Once installed, run :
+Once installed, install the locked dependency versions:
 
 ```
-php composer.phar update
+composer install
 ```
+
+A one-command acceptance check (MariaDB + dev server smoke + phpunit, all in Docker) is in
+`docs/php84-spike/harness/run.sh`.
 
 ### Apache
 This is a basic example for an Apache vhost. The `MORGUE_ENVIRONMENT` variable
