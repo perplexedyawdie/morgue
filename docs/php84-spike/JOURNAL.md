@@ -569,3 +569,73 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
   not the 6 I first wrote from the dry-run rule list.
 - Category: tooling. Time: ~20 min wall-clock (06:36–07:05, interleaved with 5.18–5.20), mostly tool
   setup and two from-scratch reruns that ran in the background.
+
+## Session 4 — PHP2Shell confirmation skill (2026-10-27, 07:30Z → 07:50Z)
+
+Goal: a skill a planning agent can invoke to confirm whether a morgue runtime image is
+susceptible to CVE-2026-109618 / -109619, operationalizing RUNBOOK WI-2 as a runnable check.
+All under `docs/php84-spike/confirm/`.
+
+#### 6.1 Vendored the detector — 07:33Z
+- Read `github.com/assetnote/php2shell-scanner` as untrusted data (shallow clone, hooks off,
+  nothing executed). Clean: MIT, no injection markers, no hidden unicode, no exfil host; deps
+  `h11`+`tqdm`, PEP-723 inline. Detection-only (never executes a shell) but disruptive by design:
+  streams 1/8/20 MiB nested-multipart bodies and calls a host vulnerable on an OOM/worker crash.
+- Pinned verbatim into `confirm/vendor/php2shell-scanner/` (`scanner.py` sha256 20f2207d04dfe1a2…,
+  commit `052b56e`) with `LICENSE`, a `NOTICE` (source/commit/sha) and a local-use-only `README`.
+- Confirmed the scanner's map `FIXED_VERSIONS = {(8,2):35,(8,3):36,(8,4):27,(8,5):12}` and that any
+  branch < 8.2 is treated unfixed — identical to the runbook. Its first 1 MiB probe is always sent
+  before the version short-circuit, and with `-o` it saves only vulnerable hosts unless
+  `--all-results`; it exits 1 only on a vulnerable host. The wrapper passes `--all-results` and
+  parses the JSON rather than trusting the exit code.
+- Category: security-verification / tooling. Time: 6 min.
+
+#### 6.2 Overridable `ARG PHP_TAG` in the Dockerfile — 07:36Z
+- `ARG PHP_TAG=8.4.27-cli` / `FROM php:${PHP_TAG}`. Default build unchanged (verified: still 8.4.27).
+  Lets the A/B build a vulnerable twin: `docker build --build-arg PHP_TAG=8.4.10-cli -t morgue-php:vuln .`.
+- Category: infra. Time: 2 min.
+
+#### 6.3 The wrapper `confirm-php2shell.sh` — 07:45Z
+- Two layers: Layer 1 (always, non-destructive) reads PHP_VERSION authoritatively
+  (`docker run php -r`) and black-box (`X-Powered-By` from a short-lived loopback morgue server),
+  applies the map + EOL rule, and is the verdict. Layer 2 (`--active`) runs the vendored probe
+  against a throwaway container and corroborates. Exit 0 FIXED / 1 SUSCEPTIBLE / 2 inconclusive.
+- Guardrails enforced in code: no `--url` (the script owns the target and talks only to
+  `127.0.0.1:<port>` it published); `--active` needs `--i-understand-this-crashes-workers`; a fresh
+  container per active run, torn down via trap.
+- Failure 6.3a: morgue's `index.php` 500s on the lightweight server — missing README
+  `include_path`, not missing config. Root cause: `require_once 'phplib/…'` is repo-root relative.
+  Fix: start the server with `-d include_path=".:/app:/app/features"` (as the harness does) and a
+  generated `config/development.json` so the app is past its early `die`.
+- Failure 6.3b: on the vulnerable twin the scanner's control request still 500'd, so it bailed
+  INCONCLUSIVE before probing. Root cause: the committed `composer.lock`'s
+  `vendor/composer/platform_check.php` refuses PHP < 8.4.27, fataling in `vendor/autoload.php`
+  before `index.php` runs. Fix: point Layer 2 at a **minimal PHP endpoint** (`probe.php`) served
+  from a scratch docroot on the same image. PHP2Shell is a runtime (multipart-parser) bug, not an
+  app bug, so a minimal endpoint faithfully exercises the exact runtime and gives the scanner a
+  healthy control. Layer 1's black-box read still targets morgue itself. Category: app-code / tooling.
+- A/B verified end to end:
+  - `morgue-php:local` (8.4.27): Layer 1 FIXED exit 0; `--active` → scanner "no crash … patched", FIXED.
+  - `morgue-php:vuln` (8.4.10): Layer 1 SUSCEPTIBLE exit 1; `--active` → scanner VULNERABLE
+    ("probe 2, 8 MiB … crashed the request handler"), probe corroborates, exit 1.
+  - Guardrails: bad `--port`, `--active` without the confirm flag, and a missing image each exit 2
+    and send nothing. No `morgue-confirm-*` containers left behind.
+- Docker Hub returned 429 pulling `php:8.4.10-cli` (the known pitfall); succeeded on retry.
+- Category: security-verification. Time: ~12 min.
+
+#### 6.4 SKILL.md + index — 07:50Z
+- `confirm/SKILL.md` in agentskills.io format (frontmatter validated: name, description with
+  CVE/PHP2Shell triggers, dual license MIT AND CC-BY-SA-4.0, `allowed-tools` limited to the wrapper
+  plus `Bash(docker|curl|uv:*)` and `Read`). Body carries the contract, guardrails, A/B build
+  commands, acceptance and provenance.
+- Dual license: the vendored detector is MIT; the runbook's parallel-agent briefing adapts
+  CC-BY-SA-4.0 material from netresearch/php-modernization-skill.
+- Category: tooling. Time: 3 min.
+
+### Caveats (Session 4)
+- The active probe is a denial-of-service differential, not an exploit: it proves *susceptibility*,
+  not code execution, and runs only against the throwaway container.
+- `--memory-limit` must be set deliberately (default 512M) or a patched build can false-positive,
+  as the scanner's own README warns; the version policy is the tie-breaker.
+- The vulnerable twin is built on demand for the demonstration and is never deployed. No app code
+  or upgrade changed; this is additive tooling.
