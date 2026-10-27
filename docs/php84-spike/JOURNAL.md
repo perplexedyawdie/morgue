@@ -121,7 +121,7 @@ Entry format: commands → exact error → root cause → fix → category
   Category: dependency. 1 min.
 - Category: runtime. Time: 4 min total.
 
-### 4. Dependencies (composer.json) — 2026-10-27T05:42Z (WIP)
+### 4. Dependencies (composer.json) — 2026-10-27T05:42Z
 - New `composer.json`: `php: ">=8.4.27 <8.5"`, `config.platform.php: "8.4.27"`, `slim/slim: 2.6.3`
   (exact; abandoned), `wikimedia/composer-merge-plugin: ^2.1` (was `dev-master`) with
   `config.allow-plugins`, `phpunit/phpunit: ^11` (was `^6`), `twig/twig` **removed**.
@@ -150,3 +150,22 @@ Entry format: commands → exact error → root cause → fix → category
   `sabre/dav`. Root cause: composer-merge-plugin was not installed yet when the root package
   was resolved, so `features/upload/composer.json` was never merged. Fix: run
   `composer update` a second time once the plugin is installed. Category: dependency.
+- Failure 4c: during that first `composer install --prefer-source` (6 min), the merge plugin
+  ran its own follow-up update after it was installed and added `sabre/*` to the lock,
+  but that nested update ignored `--prefer-source` and failed the same way as 4a
+  (`Failed to download sabre/dav from dist`). Fix: run `composer install --prefer-source`
+  again against the now-complete lock (9 s with the cache volume). Category: tooling. 2 min.
+- Resolved lock (committed): prod `slim/slim 2.6.3`, `sabre/dav 4.7.1` (+ sabre/http 5.1.13,
+  event 5.1.9, uri 2.3.4, vobject 4.6.1, xml 2.2.11, psr/log 3.0.2),
+  `wikimedia/composer-merge-plugin v2.1.0`; dev `phpunit/phpunit 11.5.57` + 26 sebastian/phar-io/etc.
+  `composer audit` → "No security vulnerability advisories found". `composer validate` reports no
+  stale lock (only name/description/license warnings).
+- Gap: `composer audit --abandoned=report` does NOT flag Slim 2: the package name `slim/slim` is
+  alive (v4), only its 2.x line is dead. Abandonment has to be judged per major line.
+- Slim 2 / `get_magic_quotes_gpc()` strategy, option 1 (app-level polyfill loaded before Slim):
+  `phplib/compat/slim2_php8.php`, registered in `composer.json` `autoload.files` so it runs at
+  `require 'vendor/autoload.php'`. It defines `get_magic_quotes_gpc()` (returns false) and the
+  `MCRYPT_RIJNDAEL_256` / `MCRYPT_MODE_CBC` constants (static scan P2), all guarded. Unqualified
+  calls inside `namespace Slim\Http` fall back to the global function, so no vendor edit is
+  needed. Whether it suffices is decided in step 5.
+- Category: dependency. Time: 15 min (most of it waiting on git clones).
