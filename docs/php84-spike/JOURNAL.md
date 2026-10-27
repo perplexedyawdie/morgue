@@ -86,3 +86,35 @@ Entry format: commands → exact error → root cause → fix → category
 - Behavioural finding: Slim 2's cookie `encrypt()` is a no-op when ext/mcrypt is absent, and
   the 7.1 image had no mcrypt, so `cookies.encrypt => true` never encrypted anything.
 - Category: tooling. Time: 15 min.
+
+### 3. Runtime: Dockerfile for PHP 8.4.27 — 2026-10-27T06:10Z
+- Added repo-root `Dockerfile`: `FROM php:8.4.27-cli` (exact patch pin), `git` + `unzip`
+  (Composer needs one of unzip/ext-zip to extract dists), `docker-php-ext-install pdo_mysql`,
+  `COPY --from=composer:2.10.3` (latest Composer 2 on 2026-10-27), `COMPOSER_ALLOW_SUPERUSER=1`.
+  None of the 7.1 shims are needed: trixie is a supported Debian, Composer 2 is current.
+  Added `.dockerignore` (vendor, .git, harness output) and `docker/extra-ca/` for an optional
+  proxy CA; the harness passes `HTTPS_PROXY` as a build arg and drops `$SSL_CERT_FILE` there.
+- Failure 3a: `docker build` → `failed to resolve source metadata for
+  docker.io/library/composer:2.10.3: … 429 Too Many Requests`. Root cause: anonymous Docker
+  Hub pull rate limit (shared sandbox egress IP). Fix: pulled `composer:2` once (succeeded on
+  retry, = 2.10.3) and `docker tag composer:2 composer:2.10.3` locally. Category: infra. 5 min.
+- Failure 3b: `apt-get update` in a container → `Could not resolve 'deb.debian.org'`. Root
+  cause: the sandbox allows only HTTPS via its proxy. Fix: Dockerfile rewrites apt sources to
+  `https://deb.debian.org` and trusts `docker/extra-ca/*.crt`; build uses `--network host`
+  and `--build-arg HTTPS_PROXY`. Category: infra. 5 min.
+- Verified: `php -v` → `PHP 8.4.27 (cli) (built: Oct 21 2026 15:53:07) (NTS)`; `pdo_mysql`
+  loaded; `Composer version 2.10.3 2026-08-27`.
+- First harness run on 8.4.27 with the UNCHANGED composer.json → RED at `composer install`:
+  ```
+  Root composer.json requires twig/twig 1.*, found twig/twig[1.3.0, ..., v1.44.8] but these
+  were not loaded, because they are affected by security advisories ("PKSA-8zx5-v2nz-58pb", …
+  19 advisories)
+  Root composer.json requires phpunit/phpunit ^6, found phpunit/phpunit[6.0.0, ..., 6.5.14]
+  but these were not loaded, because they are affected by security advisories ("PKSA-z3gr-8qht-p93v")
+  ```
+  Root cause: recent Composer 2 releases enable `policy.advisories.block` by default and drop
+  any version with a Packagist security advisory during resolution. It fails before any PHP
+  version constraint is even considered. This is new compared with the 7.1 baseline (Composer
+  2.2 LTS, which only audits after install). It is handled by step 4 (remove Twig, move PHPUnit).
+  Category: dependency. 5 min.
+- Category: runtime. Time: 25 min total.

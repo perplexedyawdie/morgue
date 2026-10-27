@@ -61,7 +61,10 @@ php_run() { docker run --rm "${NET_ARGS[@]}" -v "$REPO:/app" -w /app "$PHP_IMAGE
 # --- 1. image -------------------------------------------------------------
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
   log "build $PHP_IMAGE from $REPO/Dockerfile"
-  docker build --network host -t "$PHP_IMAGE" "$REPO" > "$OUT/build.log" 2>&1 \
+  BUILD_ARGS=()
+  [ -n "${HTTPS_PROXY:-}" ] && BUILD_ARGS+=(--build-arg "HTTPS_PROXY=$HTTPS_PROXY" --build-arg "https_proxy=$HTTPS_PROXY")
+  [ -n "$CA" ] && [ -f "$CA" ] && cp "$CA" "$REPO/docker/extra-ca/harness-proxy-ca.crt"
+  docker build --network host "${BUILD_ARGS[@]}" -t "$PHP_IMAGE" "$REPO" > "$OUT/build.log" 2>&1 \
     || { tail -30 "$OUT/build.log"; echo "image build failed"; exit 1; }
 fi
 log "runtime"
