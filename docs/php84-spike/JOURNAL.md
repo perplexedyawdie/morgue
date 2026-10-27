@@ -333,3 +333,10 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   Slim both halt the script.
 - Verification: `php -d error_reporting=E_ALL -l phplib/Persistence.php` → clean.
 - Category: app-code. Time: 2 min.
+
+#### 5.11 `${var}` string interpolation (8.2, predicted P8) — 06:20Z
+- Error: `Deprecated: Using ${var} in strings is deprecated, use {$var} instead in
+  ./features/anniversary/views/anniversary-mail.php on line 29` (php -l, compile time).
+- Fix: `"<h3>${subject}</h3>"` → `"<h3>{$subject}</h3>"`. Identical output.
+- Verification: `php -d error_reporting=E_ALL -l` → clean.
+- Category: app-code. Time: 1 min.

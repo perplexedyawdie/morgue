@@ -26,7 +26,7 @@ if ($count) {
         $outage =  $count . " outages";
     }
     $subject = "$human_readable_date is the anniversary of {$outage}.";
-    echo "<h3>${subject}</h3>";
+    echo "<h3>{$subject}</h3>";
     foreach ($pms as $k => $v) {
         print Anniversary::render_outage($v);
     }
