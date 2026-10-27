@@ -121,7 +121,7 @@ Entry format: commands → exact error → root cause → fix → category
   Category: dependency. 1 min.
 - Category: runtime. Time: 4 min total.
 
-### 4. Dependencies (composer.json) — 2026-10-27T05:42Z
+### 4. Dependencies (composer.json) — 2026-10-27T05:42Z → 05:58Z
 - New `composer.json`: `php: ">=8.4.27 <8.5"`, `config.platform.php: "8.4.27"`, `slim/slim: 2.6.3`
   (exact; abandoned), `wikimedia/composer-merge-plugin: ^2.1` (was `dev-master`) with
   `config.allow-plugins`, `phpunit/phpunit: ^11` (was `^6`), `twig/twig` **removed**.
@@ -145,7 +145,7 @@ Entry format: commands → exact error → root cause → fix → category
   `GIT_SSL_CAINFO` for the proxy CA). Much slower (full `git clone --mirror` per package,
   ~5 min for 29 packages), so the harness now keeps the Composer cache in a named volume
   (`morgue-composer-cache`) and only falls back to `--prefer-source` when the dist error
-  appears. Category: infra. Time: 8 min.
+  appears. Category: infra.
 - Failure 4b (observed in the lock): first `composer update` produced a lock WITHOUT
   `sabre/dav`. Root cause: composer-merge-plugin was not installed yet when the root package
   was resolved, so `features/upload/composer.json` was never merged. Fix: run
@@ -154,7 +154,7 @@ Entry format: commands → exact error → root cause → fix → category
   ran its own follow-up update after it was installed and added `sabre/*` to the lock,
   but that nested update ignored `--prefer-source` and failed the same way as 4a
   (`Failed to download sabre/dav from dist`). Fix: run `composer install --prefer-source`
-  again against the now-complete lock (9 s with the cache volume). Category: tooling. 2 min.
+  again against the now-complete lock (9 s with the cache volume). Category: tooling.
 - Resolved lock (committed): prod `slim/slim 2.6.3`, `sabre/dav 4.7.1` (+ sabre/http 5.1.13,
   event 5.1.9, uri 2.3.4, vobject 4.6.1, xml 2.2.11, psr/log 3.0.2),
   `wikimedia/composer-merge-plugin v2.1.0`; dev `phpunit/phpunit 11.5.57` + 26 sebastian/phar-io/etc.
@@ -168,12 +168,12 @@ Entry format: commands → exact error → root cause → fix → category
   `MCRYPT_RIJNDAEL_256` / `MCRYPT_MODE_CBC` constants (static scan P2), all guarded. Unqualified
   calls inside `namespace Slim\Http` fall back to the global function, so no vendor edit is
   needed. Whether it suffices is decided in step 5.
-- Category: dependency. Time: 15 min (most of it waiting on git clones).
+- Category: dependency. Time: 16 min wall-clock (05:42–05:58), ~12 of it waiting on git clones.
 
 ### 5. Fix loop
 Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 
-#### 5.1 Slim 2 vendor deprecations are fatal under Slim's own error handler — 05:59Z
+#### 5.1 Slim 2 vendor deprecations are fatal under Slim's own error handler — 06:00Z
 - Command: `SKIP_BUILD=1 docs/php84-spike/harness/run.sh` (first full run on the new deps).
 - Error: `GET /ping` body starts with `Deprecated: Return type of Slim\Helper\Set::offsetExists($offset)
   should either be compatible with ArrayAccess::offsetExists(mixed $offset): bool, or the
@@ -214,9 +214,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   removed function were called fully-qualified or a removed class/syntax were used.
 - After the fix: /ping, /, POST /events, DB row PASS; `GET /events/1` → 500 (5.2); phpunit
   fatal (5.3).
-- Category: framework-vendor. Time: 6 min.
+- Category: framework-vendor. Time: 2 min.
 
-#### 5.2 Slack API response read on null → 500 on every event page — 06:03Z
+#### 5.2 Slack API response read on null → 500 on every event page — 06:01Z
 - Command: harness run after 5.1.
 - Error: `GET /events/1 -> 500`, body "Slim Application Error … Type: ErrorException Code: 2
   Message: Attempt to read property "ok" on null File: /app/features/slack/lib.php Line: 77",
@@ -230,9 +230,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - Fix (app code): `features/slack/lib.php:42,77,126` → `empty($x->ok)` / `!empty($data->ok)`,
   which is null-safe and silent.
 - After: all 7 smoke checks PASS; phpunit still fatal (5.3).
-- Category: app-code. Time: 4 min.
+- Category: app-code. Time: 1 min.
 
-#### 5.3 PHPUnit 11: `setUp()` must return `void` — 06:05Z
+#### 5.3 PHPUnit 11: `setUp()` must return `void` — 06:02Z
 - Command: harness run after 5.2 (phpunit step).
 - Error: `PHP Fatal error: Declaration of CurlClientTest::setUp() must be compatible with
   PHPUnit\Framework\TestCase::setUp(): void in /app/tests/unit/CurlClient_Test.php on line 8`.
@@ -243,9 +243,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - After: `Class Contact_Test cannot be found in /app/tests/unit/Contact_Test.php` (×3),
   `No tests executed!` (5.4); `PHP Deprecated: CurlClient::get(): Implicitly marking parameter
   $params as nullable` (5.5).
-- Category: tests. Time: 2 min.
+- Category: tests. Time: 1 min.
 
-#### 5.4 PHPUnit 10+: test class must match its file name — 06:06Z
+#### 5.4 PHPUnit 10+: test class must match its file name — 06:02Z
 - Error: `There were 3 PHPUnit test runner warnings: 1) Class Contact_Test cannot be found in
   /app/tests/unit/Contact_Test.php` … `No tests executed!` (exit 1).
 - Root cause: PHPUnit 10 dropped the "find any TestCase subclass in the file" fallback; the
@@ -254,9 +254,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   `*Test.php` suffix the directory scan needs; nothing else referenced the old names).
 - After: `Tests: 7, Assertions: 7, Errors: 2, Deprecations: 8, PHPUnit Deprecations: 2`:
   TypeError from `implode()` (5.5), non-static data provider (5.6), deprecations (5.7, 5.8).
-- Category: tests. Time: 2 min.
+- Category: tests. Time: <1 min.
 
-#### 5.5 `implode()` with reversed arguments → TypeError (predicted P4) — 06:08Z
+#### 5.5 `implode()` with reversed arguments → TypeError (predicted P4) — 06:03Z
 - Error: `JiraClientTest::test_getJiraApiResponse_withTickets  TypeError: implode(): Argument #1
   ($separator) must be of type string, array given  /app/features/jira/lib.php:223`.
 - Root cause: `implode($pieces, $glue)` was deprecated in 7.4 and removed in 8.0. Found by the
@@ -264,9 +264,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   only run when an event has tickets), so only the unit test catches it at runtime.
 - Fix: `features/jira/lib.php:223,225` → `implode('","', $jira_key_input)`, `implode(',', $fields)`.
 - After: `Tests: 7, Assertions: 12, Errors: 1, Deprecations: 8, PHPUnit Deprecations: 2`.
-- Category: app-code. Time: 2 min.
+- Category: app-code. Time: <1 min.
 
-#### 5.6 PHPUnit 11 API: static data providers, attributes, `willReturn`, declared props — 06:10Z
+#### 5.6 PHPUnit 11 API: static data providers, attributes, `willReturn`, declared props — 06:03Z
 - Command: `vendor/bin/phpunit --include-path=phplib --filter '/^(?!.*CurlClient)/'
   --display-deprecations --display-phpunit-deprecations tests/unit/` (at E_ALL).
 - Errors: `The data provider specified for JiraClientTest::test_unpackTicketInfo is invalid. Data
@@ -284,9 +284,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   Done to PHPUnit 12-ready level so the next major isn't another migration.
 - After: `OK, but there were issues! Tests: 11, Assertions: 16, Deprecations: 6` — the 11 tests
   match the 7.1 baseline count; remaining deprecations are app code (5.7, 5.8).
-- Category: tests. Time: 3 min.
+- Category: tests. Time: 1 min.
 
-#### 5.7 JiraClient dynamic properties (8.2) — 06:13Z
+#### 5.7 JiraClient dynamic properties (8.2) — 06:04Z
 - Error (phpunit, E_ALL): `Creation of dynamic property JiraClient::$curl_client is deprecated`
   (+ `$jira_base_url`, `$username`, `$password`, `$proxy`, `$additional_fields`), features/jira/lib.php:180-190.
 - Root cause: PHP 8.2 deprecates writing undeclared properties.
@@ -297,9 +297,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   rendered on every event page) → 5.8.
 - Fix: declared the six as `private` in `JiraClient` (grep: nothing outside the class reads them).
 - After: `OK (11 tests, 16 assertions)`; one compile-time deprecation left on stderr (5.9).
-- Category: app-code. Time: 4 min.
+- Category: app-code. Time: 1 min.
 
-#### 5.8 Calendar / Uploader_Webdav dynamic properties (found by the sweep, not by tests) — 06:16Z
+#### 5.8 Calendar / Uploader_Webdav dynamic properties (found by the sweep, not by tests) — 06:05Z
 - Error (CLI repro at E_ALL; the web path hides it): `Creation of dynamic property
   Calendar::$clientId is deprecated` … for 9 properties written in `Calendar::__construct()`,
   and `Uploader_Webdav::$client` in `create_client()`.
@@ -311,18 +311,18 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   `new Calendar` → "Calendar ok: CLIENTID", `new Uploader_Webdav([...])` → OK, which also shows
   sabre/dav 4.7.1's `Sabre\DAV\Client` accepts the 2.1-era settings array (baseUri, userName,
   password, proxy).
-- Category: app-code. Time: 4 min.
+- Category: app-code. Time: 1 min.
 
-#### 5.9 Implicitly nullable parameter (8.4, predicted P5) — 06:18Z
+#### 5.9 Implicitly nullable parameter (8.4, predicted P5) — 06:05Z
 - Error: `PHP Deprecated: CurlClient::get(): Implicitly marking parameter $params as nullable is
   deprecated, the explicit nullable type must be used instead in /app/phplib/CurlClient.php on line 5`
   (compile time, printed on every phpunit run and every request that loads CurlClient).
 - Root cause: PHP 8.4 deprecates `array $x = null`; the type must say `?array`.
 - Fix: `phplib/CurlClient.php:5` → `?array $params = null`. Same accepted values as before.
 - Verification: `php -d error_reporting=E_ALL -l phplib/CurlClient.php` → "No syntax errors", no deprecation.
-- Category: app-code. Time: 1 min.
+- Category: app-code. Time: <1 min.
 
-#### 5.10 `Persistence::get_array()`: optional-before-required (8.0) and `E_USER_ERROR` (8.4) — 06:19Z
+#### 5.10 `Persistence::get_array()`: optional-before-required (8.0) and `E_USER_ERROR` (8.4) — 06:05Z
 - Error: `PHP Deprecated: Persistence::get_array(): Optional parameter $where declared before
   required parameter $table_name is implicitly treated as a required parameter in
   /app/phplib/Persistence.php on line 230` (compile time); static scan P7: `Passing E_USER_ERROR
@@ -334,16 +334,16 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   as before: under Slim's handler E_USER_ERROR already became a thrown ErrorException; outside
   Slim both halt the script.
 - Verification: `php -d error_reporting=E_ALL -l phplib/Persistence.php` → clean.
-- Category: app-code. Time: 2 min.
+- Category: app-code. Time: <1 min.
 
-#### 5.11 `${var}` string interpolation (8.2, predicted P8) — 06:20Z
+#### 5.11 `${var}` string interpolation (8.2, predicted P8) — 06:05Z
 - Error: `Deprecated: Using ${var} in strings is deprecated, use {$var} instead in
   ./features/anniversary/views/anniversary-mail.php on line 29` (php -l, compile time).
 - Fix: `"<h3>${subject}</h3>"` → `"<h3>{$subject}</h3>"`. Identical output.
 - Verification: `php -d error_reporting=E_ALL -l` → clean.
-- Category: app-code. Time: 1 min.
+- Category: app-code. Time: <1 min.
 
-#### 5.12 App's own mcrypt constants (predicted P1) — 06:22Z
+#### 5.12 App's own mcrypt constants (predicted P1) — 06:06Z
 - Finding: `htdocs/index.php:28-29` passed `MCRYPT_RIJNDAEL_256` / `MCRYPT_MODE_CBC` to Slim. Not
   failing any more (the polyfill from step 4 defines them), but the app should not depend on a
   removed extension's constants.
@@ -351,9 +351,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   documented that `cookies.encrypt` is a no-op without ext/mcrypt (it already was on 7.1).
 - After: **HARNESS GREEN** — /ping, /, POST /events → /events/1, GET /events/1 shows the title,
   row persisted, no PHP error text, PHP log clean; `OK (11 tests, 16 assertions)` at E_ALL.
-- Category: app-code. Time: 2 min.
+- Category: app-code. Time: 1 min.
 
-#### 5.13 Unknown event id → 500 instead of 404 (found by crawling every GET route) — 06:27Z
+#### 5.13 Unknown event id → 500 instead of 404 (found by crawling every GET route) — 06:07Z
 - Command: harness with `KEEP=1`, then `curl` over all 27 GET routes from `htdocs/index.php` and
   `features/*/routes.php` with a real id (1) and a missing id (999), grepping for Slim error pages.
   All real-id routes → 200/302 (`/events/1/channels` 404 is the disabled irc feature).
@@ -368,9 +368,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - Fix: `get_postmortem()` returns its documented error shape `array("id" => null, "error" => …)`
   when the row is missing. Both callers already handle `id === null`.
 - After: `/events/999`, `/events/999/{summary,tldr,why_surprised}` → 404.
-- Category: app-code. Time: 5 min.
+- Category: app-code. Time: 1 min.
 
-#### 5.14 Unknown id on `/events/:id/lock` and `/history/:event_id/:history_id` → 500 — 06:30Z
+#### 5.14 Unknown id on `/events/:id/lock` and `/history/:event_id/:history_id` → 500 — 06:07Z
 - Errors (route crawl): `GET /events/999/lock` → 500 "Undefined array key "created" File:
   /app/phplib/Postmortem.php Line: 142"; `GET /history/999/999` → 500 "Undefined array key
   "create_date" File: /app/features/history/routes.php Line: 10".
@@ -382,9 +382,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   and the lock route return 404 when the event (or history entry) does not exist.
 - After: `/events/999/lock`, `/history/999/999`, `/history/1/999` → 404; `/events/1/lock` → 200
   `{"status":0,"modifier":"morgue_user"}`; `/history/1/1` → 200.
-- Category: app-code. Time: 4 min.
+- Category: app-code. Time: <1 min.
 
-#### 5.15 Web-path deprecation audit (tool) — 06:37Z
+#### 5.15 Web-path deprecation audit (tool) — 06:09Z
 - Problem: with the accepted runtime config, Slim's handler swallows *all* deprecations on the
   web path, app ones included (5.1), and at plain E_ALL Slim's own deprecations kill every
   request. So nothing so far had looked for app deprecations in request handlers.
@@ -400,9 +400,9 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   `features/anniversary/routes.php:11,38,90` (`trim(null)`), `features/search/routes.php:5`
   (`urldecode(null)`) → 5.16.
 - Verified afterwards: `git -C vendor/slim/slim status --short` is empty (vendor restored).
-- Category: tooling. Time: 8 min.
+- Category: tooling. Time: 2 min.
 
-#### 5.16 Null passed to non-nullable string parameters (8.1, predicted P14) — 06:41Z
+#### 5.16 Null passed to non-nullable string parameters (8.1, predicted P14) — 06:09Z
 - Errors (audit 5.15): `DateTime::__construct(): Passing null to parameter #1 ($datetime) of type
   string is deprecated` (phplib/Postmortem.php:47 on create, :559 on history), `trim(): Passing null
   to parameter #1 ($string)` (htdocs/index.php:134 on `GET /` without `?tags`,
@@ -415,4 +415,13 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   Same values as the old coercion.
 - After: `audit-web.sh` → app findings 0, 5xx responses 0 (41 requests); vendor entries are only
   the accepted Slim list.
-- Category: app-code. Time: 3 min.
+- Category: app-code. Time: <1 min.
+
+#### 5.17 Clean-room re-run: GREEN — 06:17Z
+- Command: `rm -rf vendor config/development.json && docs/php84-spike/harness/run.sh` (image
+  rebuilt from the Dockerfile, vendor reinstalled from the committed lock).
+- Result: `HARNESS GREEN` — runtime policy PHP 8.4.27 ≥ 8.4.27, pdo_mysql, `composer install`
+  (used the `--prefer-source` fallback automatically), 7 schemas, 7 smoke checks, `OK (11 tests,
+  16 assertions)` at E_ALL. Web audit (`audit-web.sh`) separately: 41 requests, 0 × 5xx, 0 app
+  findings.
+- Category: tooling. Time: 7 min (unattended; mostly the source install).
