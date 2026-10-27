@@ -10,6 +10,19 @@ one issue for one specialist agent: fill in the `<placeholders>`, keep the accep
 as the issue's definition of done, and wire the "Depends on" lines into issue links. Every
 acceptance criterion has a command, so a reviewer agent can check it mechanically.
 
+**What static tools do and don't cover (measured).** On the morgue pre-fix tree, 20 defects
+were fixed by hand:
+- PHPCompatibility + `php -l` predicted 6 of them.
+- PHPStan **level 0** found 8 (precise, 47 findings in total), including one real 500 that the hand
+  process missed.
+- A **targeted** Rector config fixed 8 mechanically while touching 6 files.
+
+Together they identify 16 of 20 before anything runs. The remaining class (missing-id paths, null
+from untyped framework getters, render-time API calls, a framework error handler that changes
+error semantics) is only found at runtime, by the harness, the route crawl and the web audit.
+Details: `tool-eval/RESULTS.md`. The work items below use static tools first and runtime testing
+for the rest.
+
 **Placeholders used throughout**
 
 | Placeholder | Meaning | morgue value |
@@ -24,12 +37,15 @@ acceptance criterion has a command, so a reviewer agent can check it mechanicall
 
 ```
 WI-1 harness ─┬─→ WI-3 static scan ─┐
-              │                     ├─→ WI-4 runtime bump → WI-5 deps+lock ─┬─→ WI-6 vendor shims → WI-7 app fixes ─┐
-WI-2 exposure ┘ (parallel with 1/3) │                                        └─→ WI-8 test migration ─────────────┤
-                                    └──────────────────────────────────────────────────────────────────────────────┴─→ WI-9 security re-verify → WI-10 release
+              │                     ├─→ WI-4 runtime bump → WI-5 deps+lock ─┬─→ WI-6 vendor shims ──┬─→ WI-7 app fixes ─┐
+WI-2 exposure ┘ (parallel with 1/3) │                                        ├─→ WI-7A Rector ──────┘                   │
+                                    │                                        └─→ WI-8 test migration ──────────────────┤
+                                    └───────────────────────────────────────────────────────────────────────────────────┴─→ WI-9 security re-verify → WI-10 release
 ```
-WI-2 and WI-3 can run in parallel with WI-1. WI-7 and WI-8 run in parallel once WI-5 is done
-(they touch different files) but share the harness, so they must merge in sequence.
+WI-2 and WI-3 can run in parallel with WI-1. After WI-5, WI-6, WI-7A and WI-8 can start in
+parallel. WI-7A (automated rewrites) must merge before WI-7 starts, because WI-7 works on what
+Rector leaves. WI-7A and WI-8 both touch test files, so either serialise them or give the PHPUnit
+rules to WI-8 only (see "Running work items with parallel agents").
 
 ---
 
@@ -122,21 +138,41 @@ WI-2 and WI-3 can run in parallel with WI-1. WI-7 and WI-8 run in parallel once 
   4. Grep for removed functions and extensions (`each`, `create_function`, `mcrypt_*`,
      `get_magic_quotes_*`, `mysql_*`, `utf8_encode`, `strftime`, `FILTER_SANITIZE_STRING`, …) and
      for constants of removed extensions.
-  5. Run a dynamic-property sweep (tokenizer script: `$this->x =` writes vs declared properties)
-     over first-party classes. PHPCompatibility does not catch 8.2 dynamic properties.
-  6. Write `static-scan.txt`: raw output plus a numbered predicted-breakage list split into
+  5. Run **PHPStan at level 0** with `phpstan/phpstan-deprecation-rules` and
+     `parameters.phpVersion: <TARGET as 80400-style int>` over `<SRC_DIRS>`, bootstrapping
+     `vendor/autoload.php`. Level 0 is the useful level for a legacy codebase:
+     - it finds undeclared (dynamic) properties (`property.notFound`), undefined variables,
+       implicit-nullable and optional-before-required parameters, and calls to deprecated
+       vendor/test-framework methods;
+     - it produces few false positives (typically `include.fileNotFound` for
+       `include_path`-relative includes);
+     - level 5 adds argument-type errors (e.g. reversed `implode()`) at roughly 5× the volume;
+     - levels 9–10 reach null/`mixed` problems only as generic noise among thousands of findings.
+
+     If PHPStan can't run, fall back to a tokenizer sweep for `$this->x =` writes vs declared
+     properties, using `nikic/php-parser` rather than `token_get_all()`, whose tokens differ
+     between PHP versions.
+  6. Run **Rector in dry-run** with `withPhpSets(php<NN>: true)` + `withComposerBased(phpunit: true)`
+     and record the rules that fire (input for WI-7A). Don't apply anything here.
+  7. Write `static-scan.txt`: raw output plus a numbered predicted-breakage list split into
      fatal / deprecation / vendor / "not statically detectable" (dependency resolution, test
-     framework API, null-to-string, undefined keys).
+     framework API, null-to-string from untyped getters, undefined keys, render-time I/O).
 - **Acceptance criteria:**
   - `static-scan.txt` is committed with tool versions and exact commands. Verify: file exists
-    and names the PHPCompatibility version.
+    and names the PHPCompatibility, PHPStan and Rector versions.
   - Vendor framework is scanned. Verify: the file has a vendor section.
+  - Every PHPStan level-0 finding is either on the predicted list or marked as a false positive
+    with a reason. Verify: count of level-0 findings = predicted + false positives.
 - **Depends on:** nothing (WI-1 helps to know which code paths matter).
 - **Risks / rollback:** static tools miss runtime-only issues and anything an error handler
   changes. Treat the list as a forecast, not a scope. Rollback: n/a.
 - **Example (morgue):** static-scan.txt sections A–E (before) and F (after + predicted vs
   actual); JOURNAL §2. The scan found reversed `implode()` arguments that an earlier grep had
-  missed, and mcrypt constants in Slim's default settings.
+  missed, and mcrypt constants in Slim's default settings. Measured afterwards (JOURNAL 5.21,
+  `tool-eval/RESULTS.md`): PHPStan level 0 on the same tree would have added all 19 dynamic
+  properties, `setUp()` signatures, deprecated `returnValue()` and an undefined variable that was
+  a real 500 nobody had found (JOURNAL 5.18). Its 4 false positives were 3 `include_path`
+  includes and 1 `staticMethod.void`.
 
 ## WI-4 Runtime bump
 
@@ -248,6 +284,53 @@ WI-2 and WI-3 can run in parallel with WI-1. WI-7 and WI-8 run in parallel once 
   and the mcrypt constants that `Slim::getDefaultSettings()` reads on every request), §5.1 (Slim's
   `handleErrors()` made `#[\ReturnTypeWillChange]` deprecations fatal; 25 accepted deprecations
   listed).
+
+## WI-7A Automated mechanical rewrites (Rector, targeted)
+
+- **Goal:** let a tool make the deterministic signature/syntax fixes in one small, reviewable
+  change, so the manual fix loop (WI-7) only deals with what needs judgement.
+- **Specialist role:** compat-fix (automation).
+- **Inputs:** WI-3's Rector dry-run (rules that fired) and PHPStan level-0 list; installed vendor/
+  (Rector needs the autoloader and reads the installed PHPUnit version).
+- **Tasks:**
+  1. Write a **targeted** `rector.php`: only the rules from the dry-run that fix a predicted
+     defect, plus `withComposerBased(phpunit: true)` for the test-framework upgrade. Typical PHP 7 →
+     8.4 rules:
+     - `ConsistentImplodeRector` (reversed `implode()` arguments)
+     - `Php84\…\ExplicitNullableParamTypeRector` (implicit nullable)
+     - `OptionalParametersAfterRequiredRector`
+     - `Php82\…\VariableInStringInterpolationFixerRector` (`${var}`)
+     - `Php71\…\RemoveExtraParametersRector`
+
+     Keep the cosmetic level-set rules (`LongArrayToShortArrayRector`, `ExplicitPublicClassMethodRector`,
+     constructor promotion, `readonly`) out of the upgrade change; they belong in a later
+     modernisation PR.
+  2. Run `vendor/bin/rector process --dry-run` (invoke the binary directly: Composer script aliases
+     can swallow `--dry-run`), review the diff, **including every added line**, then apply.
+  3. Check each rewrite where Rector picked a different fix than a human would. Example:
+     `OptionalParametersAfterRequiredRector` makes the *required* parameter optional (`= null`)
+     instead of removing a dead default; restore the intended signature by hand.
+  4. Don't expect Rector to fix the runtime classes. On an untyped legacy framework,
+     `NullToStrictStringFuncCallArgRector` stays silent (it can't prove an argument nullable, and
+     `new X(null)` isn't a function call), and `CompleteDynamicPropertiesRector` is deprecated (a
+     no-op in Rector 2.8). Those go to WI-7, using the PHPStan level-0 list.
+  5. Lint and test: `php -d error_reporting=E_ALL -l` over `<SRC_DIRS>`, then `<HARNESS>`.
+- **Acceptance criteria:**
+  - The applied diff touches only files with a predicted defect. Verify: `git diff --stat` ⊆ the
+    WI-3 list.
+  - No compile-time deprecations remain. Verify: `php -d error_reporting=E_ALL -l` → nothing but
+    "No syntax errors".
+  - Re-running the same config is a no-op. Verify: `vendor/bin/rector process --dry-run` → exit 0,
+    no diff.
+  - No new test failures. Verify: `<HARNESS>` phpunit step no worse than before.
+- **Depends on:** WI-5 (vendor installed). Merges before WI-7 starts.
+- **Risks / rollback:** lossy or surprising rewrites (Rector can't see framework contracts). Review
+  added lines; one commit, revert as a whole. Run Rector with the target PHP (in `<IMAGE>`), not the
+  host's.
+- **Example (morgue):** `tool-eval/RESULTS.md`, JOURNAL 5.21. The full level sets fixed 8 items
+  across 40 files; the targeted config fixed the same 8 in 6 files (+10/−12 lines): `setUp(): void`,
+  `implode()`, static provider + attribute, `createMock()` arity, `?array`, `${}`, and the
+  optional-before-required signature (in the weaker way described in task 3).
 
 ## WI-7 App code fixes (driven by tests and runtime errors)
 
