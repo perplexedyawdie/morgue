@@ -493,6 +493,40 @@ rules to WI-8 only (see "Running work items with parallel agents").
 
 ---
 
+## Running work items with parallel agents
+
+When a planning agent hands these work items to several specialist agents at once, add this
+block to every issue that changes files. It is adapted from the multi-agent hazards in
+netresearch/php-modernization-skill (`references/multi-agent-pitfalls.md`, CC-BY-SA-4.0), plus
+two hazards this spike hit (`vendor/` edits, the deprecation gate).
+
+```
+SHARED-REPO RULES FOR THIS WORK ITEM
+- Scope is by FILE. Touch only the files listed in this issue. If another open work item lists
+  the same file, wait until it has merged, then re-read the file before editing.
+- Never edit vendor/ (or generated files). To instrument vendor code, mount a patched copy
+  read-only inside your container. Never symlink/hardlink vendor/ from another checkout: its
+  autoloader would load that checkout's sources.
+- After any composer.lock change (yours, or from a rebase/merge): run `composer install` before
+  testing. Stale vendor/ makes local results meaningless.
+- Run tools as binaries (vendor/bin/rector, vendor/bin/phpstan), not through composer script
+  aliases: aliases can drop `-- --dry-run` and similar flags.
+- Run every check in <IMAGE> (the target PHP), never with the host PHP.
+- Before reporting "clean": clear the PHPStan result cache (vendor/bin/phpstan clear-result-cache)
+  and re-run; run <HARNESS> (it fails on deprecations by exit code).
+- Do not `git checkout --` / `git restore` / `git reset --hard` files outside your scope.
+- If a pre-commit hook blocks you, report its output; never use --no-verify.
+- A tool that printed nothing has not passed: check the exit code and that it printed a verdict.
+```
+
+Suggested file allocation for the parallel phase:
+- **WI-6**: shim file, ini, composer.json `autoload.files`.
+- **WI-7A**: the files in its dry-run diff, minus `tests/` if WI-8 runs at the same time.
+- **WI-8**: `tests/` and phpunit config.
+- **WI-7**: what's left, and it starts after WI-7A has merged.
+
+---
+
 ## Pitfalls (toolchain rot and traps seen in the spike)
 
 1. **The old runtime may no longer build.** EOL Debian images need `archive.debian.org`
@@ -510,7 +544,8 @@ rules to WI-8 only (see "Running work items with parallel agents").
    `--no-security-blocking` except to reproduce a baseline for comparison.
 5. **The framework's error handler changes what "deprecation" means.** Slim 2 throws on every
    enabled level, so vendor deprecations become fatal, and excluding E_DEPRECATED also silences
-   app deprecations on the web path. Audit with a temporarily patched handler.
+   app deprecations on the web path. Audit with a patched copy of the handler bind-mounted over
+   the vendor file inside the audit container (never patch `vendor/` on disk).
 6. **PHP 8 changed the built-in default `error_reporting` to E_ALL**, and the official images ship
    no php.ini. Notices that 7.x never showed (undefined index, array offset on bool) are now
    warnings at full volume.
@@ -524,7 +559,8 @@ rules to WI-8 only (see "Running work items with parallel agents").
    approved mirror. Containers behind an intercepting proxy need the proxy env and CA passed in
    explicitly (`--network host`, `SSL_CERT_FILE`, `GIT_SSL_CAINFO`, a CA dir in the image).
 9. **Static tools are version-gated too.** PHPCompatibility 9.3.5 (last stable) knows nothing
-   past 8.0; use 10.x alpha. Neither catches dynamic properties, so run a sweep.
+   past 8.0; use 10.x alpha. PHPCompatibility does not catch dynamic properties or undefined
+   variables; PHPStan level 0 does.
 10. **Tests that a filter excludes still get loaded.** A PHPUnit signature fatal in an
     "excluded" file kills the whole run.
 11. **Abandoned-but-alive names.** `composer audit --abandoned` won't flag `slim/slim` 2.x
@@ -532,3 +568,17 @@ rules to WI-8 only (see "Running work items with parallel agents").
 12. **Render-time calls to external APIs** (Slack, JIRA) pass in a networked CI and fail in an
     offline one. On PHP 8 the failure path (`json_decode(false)->ok`) is a warning, which the
     framework turns into a 500.
+13. **A passing exit code can hide deprecations.** PHPUnit 10+ exits 0 for "OK, but there were
+    issues!". Gate with `--fail-on-deprecation --fail-on-phpunit-deprecation`.
+14. **Rector's runtime-class rules don't fire on untyped legacy code.** `NullToStrictStringFuncCallArgRector`
+    needs type information that an untyped framework doesn't give, and `CompleteDynamicPropertiesRector`
+    is deprecated (a no-op) in Rector 2.8. The full level sets also rewrite dozens of files
+    cosmetically. Use a targeted config for the upgrade change.
+15. **Higher PHPStan levels are not better on day one.** On morgue, level 0 gave 8 real items in 47
+    findings; level 10 gave 14 in 1,802, the extra ones only as generic `mixed`. Start at level 0 with
+    a baseline.
+16. **A crawl driven by "the pages I know" misses sub-resource routes.** Generate the request list
+    from the router definitions (`/things/:id/parts/:part` included), or the undefined-variable 500 on
+    a rarely used route ships.
+17. **`token_get_all()` changes between PHP versions** (token kinds are merged in 8.4/8.5). Build
+    source-scanning helpers on `nikic/php-parser`, which lexes the same way on every version.
