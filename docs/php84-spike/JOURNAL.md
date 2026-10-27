@@ -242,3 +242,14 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   `No tests executed!` (5.4); `PHP Deprecated: CurlClient::get(): Implicitly marking parameter
   $params as nullable` (5.5).
 - Category: tests. Time: 2 min.
+
+#### 5.4 PHPUnit 10+: test class must match its file name — 06:06Z
+- Error: `There were 3 PHPUnit test runner warnings: 1) Class Contact_Test cannot be found in
+  /app/tests/unit/Contact_Test.php` … `No tests executed!` (exit 1).
+- Root cause: PHPUnit 10 dropped the "find any TestCase subclass in the file" fallback; the
+  class (`ContactTest`) must be named like the file (`Contact_Test.php`).
+- Fix: `git mv tests/unit/{Contact,CurlClient,JiraClient}_Test.php → …Test.php` (keeps the
+  `*Test.php` suffix the directory scan needs; nothing else referenced the old names).
+- After: `Tests: 7, Assertions: 7, Errors: 2, Deprecations: 8, PHPUnit Deprecations: 2`:
+  TypeError from `implode()` (5.5), non-static data provider (5.6), deprecations (5.7, 5.8).
+- Category: tests. Time: 2 min.
