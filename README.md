@@ -120,7 +120,7 @@ Using PHP built-in webserver it is possible to start quickly viewing what morgue
 
 **NOTE**: You may need to do some PHP setup before doing this. Follow the
 installation instructions [here][2] to install composer, then from your
-morgue base directory run `php composer.phar update` to install and update
+morgue base directory run `composer install` to install the locked versions of
 the necessary PHP packages.
 
 ```
