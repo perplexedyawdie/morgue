@@ -337,27 +337,41 @@ rules to WI-8 only (see "Running work items with parallel agents").
 - **Goal:** zero PHP warnings/fatals and zero first-party deprecations on every route, at
   `E_ALL`.
 - **Specialist role:** compat-fix.
-- **Inputs:** WI-3 predicted list; harness; route list (grep the router definitions).
+- **Inputs:** WI-3 predicted list and PHPStan level-0 list (what WI-7A left); harness; route
+  list (grep the router definitions).
 - **Tasks:**
   1. Loop: run the harness → take the first failure → fix it → rerun. **One commit per fix**,
      each with the exact error, root cause and category in the message or journal.
-  2. Fix the predicted items (WI-3) even when no test reaches them.
-  3. **Crawl every route**, not just the smoke journeys: each GET with an existing id and a
-     missing id, and each write route (POST/PUT/DELETE) with plausible data. Fail on any 5xx.
-  4. **Web-path deprecation audit:** if the framework's handler swallows deprecations, patch the
-     *local* vendor handler for the duration of the audit only (log and continue), serve at
-     `E_ALL`, crawl, restore the file, and report entries outside `vendor/`.
-  5. Typical PHP 7 → 8.x runtime classes to expect (in rough order of frequency):
+  2. Fix the predicted items (WI-3) even when no test reaches them. Work the PHPStan level-0 list
+     down to its documented false positives: it is the cheapest source of real defects on paths
+     nothing exercises.
+  3. **Crawl every route**, not just the smoke journeys. Generate the request list from the router
+     definitions so that **every route pattern** is requested, including each `:param` sub-resource
+     route (`/things/:id/parts/:part`), once with an existing id and once with a missing id. Also
+     exercise each write route (POST/PUT/DELETE) with plausible data. Fail on any 5xx.
+  4. **Web-path deprecation audit:** if the framework's handler swallows deprecations, write a
+     patched copy of the handler (log and continue) and **bind-mount it read-only over the vendor
+     file inside the audit container**. Never edit `vendor/` on disk: a crash skips the restore,
+     and hardlinked/shared vendor copies change too. Serve at `E_ALL`, crawl, and report entries
+     outside `vendor/`. Assert the vendor file's hash is unchanged and that the patch was live
+     (vendor deprecations appear in the log).
+  5. Typical PHP 7 → 8.x runtime classes to expect (in rough order of frequency). The tag says
+     which tool finds each one first:
      - null passed to non-nullable internal params (8.1): `trim(null)`, `new DateTime(null)` →
-       `?? ''`, `'now'`;
+       `?? ''`, `'now'`. *[web audit; PHPStan L5 only for literal `null`]*
      - undefined array key / array offset on `false` (warning since 8.0): `fetch()` returning
-       `false` treated as an array → return the documented "not found" shape, respond 404;
+       `false` treated as an array → return the documented "not found" shape, respond 404.
+       *[route crawl with missing ids]*
+     - undefined variables (warning since 8.0), often copy-paste bugs that 7.x silently ran with
+       `null`. *[PHPStan L0]*
      - property read on null (warning since 8.0): failed `json_decode` of an external API →
-       `empty($x->ok)`;
-     - dynamic properties (8.2) → declare them (with the visibility the callers need);
-     - removed argument orders / signatures (8.0): `implode($array, $glue)` → TypeError;
+       `empty($x->ok)`. *[harness, offline]*
+     - dynamic properties (8.2) → declare them (with the visibility the callers need). *[PHPStan L0]*
+     - removed argument orders / signatures (8.0): `implode($array, $glue)` → TypeError.
+       *[Rector / PHPCompatibility]*
      - implicitly nullable params (8.4), optional-before-required params (8.0),
-       `E_USER_ERROR` (8.4), `${var}` interpolation (8.2).
+       `E_USER_ERROR` (8.4), `${var}` interpolation (8.2). *[php -l / Rector; E_USER_ERROR:
+       PHPCompatibility only]*
   6. Code that calls external services on page render (chat or ticket APIs) must tolerate
      having no network. CI and sandboxes often have none.
 - **Acceptance criteria:**
@@ -365,14 +379,18 @@ rules to WI-8 only (see "Running work items with parallel agents").
   - Route crawl has no 5xx. Verify: audit request log `grep -c '^5'` → 0.
   - Web audit has 0 first-party findings. Verify: audit-findings file is empty.
   - Static rescan is clean. Verify: `php -d error_reporting=E_ALL -l` and PHPCompatibility over
-    `<SRC_DIRS>` → 0 findings.
-- **Depends on:** WI-6 (the app must boot); WI-8 for test-driven fixes.
+    `<SRC_DIRS>` → 0 findings; PHPStan level 0 → only the baselined false positives.
+  - Every route pattern was requested. Verify: number of distinct route patterns in the audit
+    request log = number of route definitions.
+- **Depends on:** WI-6 (the app must boot), WI-7A (merged); WI-8 for test-driven fixes.
 - **Risks / rollback:** "fixing" a warning by suppressing it (`@`, broad `isset`) can hide
   behaviour changes. Prefer restoring the old *semantics* (e.g. old `null`→`""` coercion via
   `?? ''`). Rollback: each fix is its own commit; revert individually.
 - **Example (morgue):** JOURNAL §5.2 (Slack API null), §5.5 (implode), §5.7–5.8 (dynamic
   props found by the sweep), §5.9–5.11, §5.13–5.14 (missing-id 500s found only by crawling),
-  §5.15–5.16 (web audit found 7 null-to-string deprecations hidden by the framework handler).
+  §5.15–5.16 (web audit found 7 null-to-string deprecations hidden by the framework handler),
+  §5.18 (undefined `$img` → 500 on a sub-resource route the crawl never requested; PHPStan level 0
+  had it), §5.20 (audit moved to a bind-mounted handler).
 
 ## WI-8 Test-suite migration
 
@@ -390,16 +408,24 @@ rules to WI-8 only (see "Running work items with parallel agents").
   4. `->will($this->returnValue(x))` → `->willReturn(x)`; `createMock($class, $methods)` → one
      argument; `getMockBuilder()->setMethods()` → `->onlyMethods()`.
   5. Declare properties used in `setUp()` (8.2 dynamic properties apply to test classes too).
-  6. Run with `--display-deprecations --display-phpunit-deprecations` until both are empty.
+  6. Run with `--display-deprecations --display-phpunit-deprecations` until both are empty, and
+     make the harness enforce it with `--fail-on-deprecation --fail-on-phpunit-deprecation`.
+     PHPUnit 10+ exits 0 when tests pass with deprecations, so a gate without these flags lets
+     them through.
+  7. Automation: Rector's `withComposerBased(phpunit: true)` (WI-7A) does items 1 (`setUp(): void`),
+     3 (static provider + attribute) and the `createMock()` arity. PHPStan level 0 flags items 1, 4
+     (`returnValue()` as `method.deprecated`) and 5. Item 2 (file renames) is manual: no tool flags it.
 - **Acceptance criteria:**
   - Same number of tests as the baseline, all passing. Verify: `phpunit` output `OK (<N> tests`
     with `<N>` = baseline count.
-  - No deprecations. Verify: `--display-deprecations --display-phpunit-deprecations` shows none.
+  - No deprecations, enforced by exit code. Verify: `phpunit --fail-on-deprecation
+    --fail-on-phpunit-deprecation …` exits 0.
 - **Depends on:** WI-5 (new PHPUnit in the lock).
 - **Risks / rollback:** a provider that errors silently drops its cases. Compare the test count,
   not just "green". Rollback: revert test commits.
 - **Example (morgue):** JOURNAL §5.3–5.6. The count went 7 → 11 once the data provider was
-  static; 11 matches the 7.1 baseline.
+  static; 11 matches the 7.1 baseline. §5.19: the harness had passed a run with 9 deprecations
+  until the fail-on flags were added.
 
 ## WI-9 Security re-verification
 
@@ -442,13 +468,18 @@ rules to WI-8 only (see "Running work items with parallel agents").
   3. Canary or staging soak: watch the PHP error log for any new `PHP Warning|Fatal`, and for
      5xx on routes the crawl didn't cover (uploads, integrations behind credentials).
   4. Add the runtime policy check and the harness to CI so a later image change can't regress
-     to a vulnerable or EOL PHP.
+     to a vulnerable or EOL PHP. Add the static gates too:
+     - PHPStan level 0 with a committed baseline holding only the documented false positives;
+       raise the level later, regenerating the baseline in the same change (shrink, never delete);
+     - `rector process --dry-run` with the WI-7A config, which must stay a no-op.
+
+     Run every gate under `<IMAGE>`, so local and CI use the same PHP.
   5. File follow-ups: replace the abandoned framework (WI-6), remove shims and the ini
      deprecation exclusion, patch base-image OS findings, re-enable network-dependent tests in
      an environment with egress.
 - **Acceptance criteria:**
-  - CI runs harness + policy on every merge. Verify: pipeline config contains both jobs and a
-    pipeline on the release commit is green.
+  - CI runs harness, policy, PHPStan level 0 and the Rector dry-run on every merge. Verify:
+    pipeline config contains the four jobs and a pipeline on the release commit is green.
   - Rollback is documented and was tested once in staging. Verify: runbook link plus staging
     deploy log.
   - Production reports `<TARGET>`. Verify: a health/version endpoint or
