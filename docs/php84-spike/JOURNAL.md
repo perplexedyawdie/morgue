@@ -42,3 +42,24 @@ Entry format: commands → exact error → root cause → fix → category
   warning ("assumed 'MCRYPT_RIJNDAEL_256'"); on 8.0+ it is a fatal `Error`. Predicted breakage #1,
   which the earlier read-only scan did not list.
 - Category: tooling. Time: 5 min.
+
+### 1. Acceptance harness — 2026-10-27T05:40Z
+- Added `docs/php84-spike/harness/run.sh` (one command: `docs/php84-spike/harness/run.sh`).
+  Steps: build the repo-root `Dockerfile` → `php -v` + runtime policy (`PHP_VERSION >= 8.4.27`)
+  + `pdo_mysql` loaded → `composer install` → MariaDB 10.4 container on host network, schemas
+  loaded as postmortems.sql → other top-level schemas → anniversary.sql (migrations/ skipped)
+  → `config/development.json` generated from `example.json` (mysqlhost 127.0.0.1, port 33306)
+  → README dev server (`php -S`, `MORGUE_ENVIRONMENT=development`,
+  `include_path=.:/app:/app/features`) with `error_reporting=E_ALL`, display + log errors on
+  → smoke: `GET /ping` = `{"status":"ok"}`, `GET /` = 200, `POST /events` with every NOT NULL
+  field → 302 to `/events/<id>`, `GET /events/<id>` = 200 and shows the title, row present in
+  `postmortems`, no PHP error text in any response body, PHP error log has no
+  Fatal/Parse/Warning/Notice/Deprecated lines → phpunit (`--include-path=phplib`,
+  `--filter '/^(?!.*CurlClient)/'`).
+- Design choices: all PHP runs in the image (host PHP 8.3 never used); `--network host` so
+  the egress proxy on 127.0.0.1 is reachable, and the host's `HTTPS_PROXY` + `SSL_CERT_FILE`
+  are passed in when set; outputs go to `harness/out/` (gitignored).
+- Not yet runnable: the Dockerfile arrives in step 3. Deprecations are treated as failures
+  unless suppressed through `ERROR_REPORTING` (runtime config), which keeps any accepted
+  vendor deprecation explicit.
+- Category: tooling. Time: 15 min.
