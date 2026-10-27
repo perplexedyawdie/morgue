@@ -310,3 +310,12 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   sabre/dav 4.7.1's `Sabre\DAV\Client` accepts the 2.1-era settings array (baseUri, userName,
   password, proxy).
 - Category: app-code. Time: 4 min.
+
+#### 5.9 Implicitly nullable parameter (8.4, predicted P5) — 06:18Z
+- Error: `PHP Deprecated: CurlClient::get(): Implicitly marking parameter $params as nullable is
+  deprecated, the explicit nullable type must be used instead in /app/phplib/CurlClient.php on line 5`
+  (compile time, printed on every phpunit run and every request that loads CurlClient).
+- Root cause: PHP 8.4 deprecates `array $x = null`; the type must say `?array`.
+- Fix: `phplib/CurlClient.php:5` → `?array $params = null`. Same accepted values as before.
+- Verification: `php -d error_reporting=E_ALL -l phplib/CurlClient.php` → "No syntax errors", no deprecation.
+- Category: app-code. Time: 1 min.

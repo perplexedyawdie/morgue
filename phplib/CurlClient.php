@@ -2,7 +2,7 @@
 
 class CurlClient {
 
-    function get($url, array $params = null, $user_pass = null, $proxy = null,
+    function get($url, ?array $params = null, $user_pass = null, $proxy = null,
                  $timeout = 10) {
         $query_string = empty($params)
             ? ''
