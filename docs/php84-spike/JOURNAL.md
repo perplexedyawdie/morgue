@@ -516,3 +516,16 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
   `SELECT … FROM <table>` with no `WHERE id = :id` but binds `:id`, so PDO throws and the function
   returns ERROR. That was the same on 7.1; it's listed as a follow-up.
 - Category: app-code. Time: 4 min.
+
+#### 5.19 Harness gate let PHPUnit deprecations through (found while measuring) — 06:55Z
+- Found by: running the current harness on the Rector-only tree (5.20). phpunit printed
+  `OK, but there were issues! Tests: 11, Assertions: 16, Deprecations: 8, PHPUnit Deprecations: 1`
+  and the harness reported `PASS phpunit`.
+- Root cause: PHPUnit 10+ exits 0 when tests pass but deprecations were triggered, unless
+  `--fail-on-deprecation` / `--fail-on-phpunit-deprecation` (or `failOnDeprecation` in phpunit.xml) is set.
+  The "no deprecations" criterion of step 5 was being checked by eye, not by the gate.
+- Fix: `harness/run.sh` passes `--fail-on-deprecation --fail-on-phpunit-deprecation
+  --display-deprecations --display-phpunit-deprecations`.
+- Verification: Rector-only tree → `FAIL phpunit`; this branch → `PASS phpunit: OK (11 tests, 16
+  assertions)`, `HARNESS GREEN`.
+- Category: tests. Time: 2 min.

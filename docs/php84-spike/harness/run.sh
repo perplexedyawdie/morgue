@@ -188,7 +188,9 @@ else ok "PHP log clean (fatals/warnings/notices/deprecations)"; fi
 
 # --- 7. unit tests -----------------------------------------------------------
 log "phpunit (filter: $PHPUNIT_FILTER, error_reporting=$TEST_ERROR_REPORTING)"
+# PHPUnit exits 0 on deprecations unless told otherwise; the gate must not.
 if php_run php -d error_reporting="$TEST_ERROR_REPORTING" vendor/bin/phpunit --include-path=phplib \
+     --fail-on-deprecation --fail-on-phpunit-deprecation --display-deprecations --display-phpunit-deprecations \
      --filter "$PHPUNIT_FILTER" tests/unit/ > "$OUT/phpunit.log" 2>&1; then
   ok "phpunit: $(grep -E '^(OK|Tests:)' "$OUT/phpunit.log" | tail -1)"
 else
