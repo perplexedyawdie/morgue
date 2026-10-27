@@ -23,6 +23,7 @@ class Uploader_Webdav {
 	public $username;
 	public $password;
 	public $proxy;
+	private $client;
 
 	// Please pass in the appropriate stuff
 	public function __construct($options = []) {

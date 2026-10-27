@@ -296,3 +296,17 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - Fix: declared the six as `private` in `JiraClient` (grep: nothing outside the class reads them).
 - After: `OK (11 tests, 16 assertions)`; one compile-time deprecation left on stderr (5.9).
 - Category: app-code. Time: 4 min.
+
+#### 5.8 Calendar / Uploader_Webdav dynamic properties (found by the sweep, not by tests) — 06:16Z
+- Error (CLI repro at E_ALL; the web path hides it): `Creation of dynamic property
+  Calendar::$clientId is deprecated` … for 9 properties written in `Calendar::__construct()`,
+  and `Uploader_Webdav::$client` in `create_client()`.
+- Root cause: PHP 8.2 dynamic-property deprecation; no unit test covers these classes and the
+  web path runs with `~E_DEPRECATED`, so only the static sweep found them.
+- Fix: `features/calendar/lib.php` declares the 9 as `public` (the calendar views read them);
+  `features/upload/lib/webdav.php` declares `private $client`.
+- Verification: sweep script → no findings; CLI at `error_reporting(E_ALL)`:
+  `new Calendar` → "Calendar ok: CLIENTID", `new Uploader_Webdav([...])` → OK, which also shows
+  sabre/dav 4.7.1's `Sabre\DAV\Client` accepts the 2.1-era settings array (baseUri, userName,
+  password, proxy).
+- Category: app-code. Time: 4 min.

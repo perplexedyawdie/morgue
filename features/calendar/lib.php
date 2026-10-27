@@ -2,6 +2,16 @@
 
 class Calendar extends Persistence{
 
+    public $clientId;
+    public $apiKey;
+    public $scopes;
+    public $id;
+    public $override_calendar_link;
+    public $override_calendar_link_href;
+    public $override_calendar_link_description;
+    public $facilitator;
+    public $attendees;
+
     function __construct() {
         $config = Configuration::get_configuration("calendar");
 
