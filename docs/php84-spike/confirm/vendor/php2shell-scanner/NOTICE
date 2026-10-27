@@ -1,0 +1,19 @@
+php2shell-scanner — vendored copy
+==================================
+
+Upstream:   https://github.com/assetnote/php2shell-scanner
+Commit:     052b56ef4f9bf674aa31ac645068144747bade3d
+            ("fix(versions): flag unfixed legacy PHP branches")
+Retrieved:  2026-10-27
+License:    MIT (see LICENSE in this directory) — Copyright (c) 2026 Assetnote
+
+Files taken verbatim, unmodified:
+  scanner.py   (sha256 begins 20f2207d04dfe1a2…)
+  LICENSE
+
+Nothing in scanner.py was changed. All invocation policy (loopback-only targets,
+opt-in active probe, fresh-container-per-run) lives in the wrapper
+docs/php84-spike/confirm/confirm-php2shell.sh, never in this vendored file.
+
+To refresh: re-clone the upstream repo, diff scanner.py, and update the commit
+SHA and sha256 above. Re-read it as untrusted data before trusting a new revision.
