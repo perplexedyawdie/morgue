@@ -492,15 +492,20 @@ tool → 5.16 null-to-string → 5.17 clean re-run → 6 security re-verify.
   `error_reporting`) must be set to match `docker/php/morgue.ini` at deploy time.
 - Base image OS findings (Debian 13: Trivy 2 critical / 118 high, none PHP) are a separate
   base-image patching item.
+- (Session 3) Pre-existing, not PHP-version related: `Persistence::get_association_by_id()` has no
+  `WHERE id = :id`, so every single-item GET for links, images, jira, slack and irc returns 404
+  (JOURNAL 5.18/5.20).
+- (Session 3) Adopt the static gates from RUNBOOK WI-10: PHPStan level 0 with a 4-entry baseline
+  (3 × `include.fileNotFound`, 1 × `staticMethod.void`), and the targeted Rector config as a CI dry-run.
 
-## Session 3 — measuring Rector / PHPStan against the hand-made fixes (2026-10-27, from 06:30Z)
+## Session 3 — measuring Rector / PHPStan against the hand-made fixes (2026-10-27, 06:33Z → 07:10Z)
 
 Goal: measure which of the step-5 findings two static tools (named by
 netresearch/php-modernization-skill) would have caught on the pre-fix tree `2314b75`, and fold
 the result into the runbook. Tools ran in `morgue-php:local` (PHP 8.4.27) with `--network none`,
 against a read-only export of `2314b75` plus the identical vendor/ (composer.json/lock unchanged).
 
-#### 5.18 Undefined `$img` in the single-forum-link route (found by PHPStan level 0) — 06:47Z
+#### 5.18 Undefined `$img` in the single-forum-link route (found by PHPStan level 0) — 06:56Z
 - Found by: PHPStan 2.3.2 level 0 on the pre-fix tree, `features/links/routes.php:38 [variable.undefined]
   Undefined variable: $img`. My route crawl (5.13) and web audit (5.15) never requested
   `GET /events/:id/forum_links/:forum_link`, so neither saw it.
@@ -517,7 +522,7 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
   returns ERROR. That was the same on 7.1; it's listed as a follow-up.
 - Category: app-code. Time: 4 min.
 
-#### 5.19 Harness gate let PHPUnit deprecations through (found while measuring) — 06:55Z
+#### 5.19 Harness gate let PHPUnit deprecations through (found while measuring) — 06:58Z
 - Found by: running the current harness on the Rector-only tree (5.20). phpunit printed
   `OK, but there were issues! Tests: 11, Assertions: 16, Deprecations: 8, PHPUnit Deprecations: 1`
   and the harness reported `PASS phpunit`.
@@ -530,7 +535,7 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
   assertions)`, `HARNESS GREEN`.
 - Category: tests. Time: 2 min.
 
-#### 5.20 Web audit no longer edits vendor/; crawl covers single-item GETs — 07:05Z
+#### 5.20 Web audit no longer edits vendor/; crawl covers single-item GETs — 07:01Z
 - Problem: `audit-web.sh` (5.15) patched `vendor/slim/slim/Slim/Slim.php` in place and restored it from
   a trap. That breaks the "never edit vendor/" guardrail in netresearch/php-modernization-skill, and it
   bit here: the measurement copy (`tool-eval/measure-tools.sh`) hardlinks vendor/, so an in-place write
@@ -545,9 +550,9 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
 - Observation: all four single-item GETs answer 404 for existing rows. That is the pre-existing
   `Persistence::get_association_by_id()` bug from 5.18 (no `WHERE`), shared by the links, images, jira,
   slack and irc features. Same on 7.1; it's a follow-up.
-- Category: tooling. Time: 5 min.
+- Category: tooling. Time: 3 min.
 
-#### 5.21 Measurement result: Rector / PHPStan vs the hand-made fixes — 07:15Z
+#### 5.21 Measurement result: Rector / PHPStan vs the hand-made fixes — 07:05Z
 - Commands: `docs/php84-spike/tool-eval/measure-tools.sh 2314b75 <workdir>` (fresh clones of PHPStan
   2.3.2, phpstan-deprecation-rules 2.0.5, Rector 2.8.1 via git; offline Composer path-repo project;
   all analysis `--network none`). Rerun twice from scratch: identical output.
@@ -562,4 +567,5 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
     running anything and fixed 8. Runtime-only: G01, G03, G17, G18, most of G19, and Slim's handler (5.1).
 - One estimate was wrong and is corrected: Rector config A fixes 5 items (measured by applying it),
   not the 6 I first wrote from the dry-run rule list.
-- Category: tooling. Time: 45 min (mostly tool setup and two from-scratch reruns).
+- Category: tooling. Time: ~20 min wall-clock (06:36–07:05, interleaved with 5.18–5.20), mostly tool
+  setup and two from-scratch reruns that ran in the background.

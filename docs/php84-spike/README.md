@@ -9,5 +9,7 @@
 | `harness/run.sh` | One-command acceptance harness (Docker: MariaDB, dev server smoke, phpunit) |
 | `harness/audit-web.sh` | Web-path E_ALL deprecation/warning audit over every route |
 | `harness/policy-php-version.sh` | Runtime policy: interpreter version ≥ fixed release |
+| `tool-eval/RESULTS.md` | Measured: what PHPStan 2.3.2 / Rector 2.8.1 would have caught vs the hand fixes |
+| `tool-eval/measure-tools.sh` | Reproduces that measurement (offline analysis, read-only copy of the pre-fix tree) |
 
 Quick start: `docs/php84-spike/harness/run.sh` → `HARNESS GREEN`.
