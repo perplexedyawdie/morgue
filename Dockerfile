@@ -1,6 +1,12 @@
 # Morgue runtime: PHP 8.4.27 (first 8.4 release with the PHP2Shell fix,
 # CVE-2026-109618 / CVE-2026-109619). Pin the patch version exactly; do not float to 8.4.
-FROM php:8.4.27-cli
+#
+# PHP_TAG defaults to the fixed release and must stay that way. It is overridable ONLY to
+# build a deliberately-vulnerable twin for the confirmation A/B test, e.g.
+#   docker build --build-arg PHP_TAG=8.4.10-cli -t morgue-php:vuln .
+# (see docs/php84-spike/confirm/). Never deploy an image built with an older tag.
+ARG PHP_TAG=8.4.27-cli
+FROM php:${PHP_TAG}
 
 # Optional corporate/sandbox CA (see docker/extra-ca/README.md). Docker's predefined
 # HTTPS_PROXY build arg is honoured by apt and composer when passed with --build-arg.
