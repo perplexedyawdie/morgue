@@ -67,7 +67,7 @@ Entry format: commands → exact error → root cause → fix → category
 - Category: tooling. Time: 3 min.
 
 ### 2. Static compatibility scan (no code changed) — 2026-10-27T05:39Z
-- Commands (all in `php:8.4.27-cli`): `php -l` on all 88 non-vendor PHP files; phpcs 3 +
+- Commands (all in `php:8.4.27-cli`): `php -l` on all 85 non-vendor PHP files; phpcs 3 +
   `phpcompatibility/php-compatibility` **10.0.0-alpha2** (`--runtime-set testVersion 8.4`)
   over htdocs, phplib, features, views, tests; the same phpcs run over `slim/slim` 2.6.3
   fetched into a scratch dir (vendor is where the known blocker lives, so scan it too).

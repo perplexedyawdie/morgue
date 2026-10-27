@@ -13,7 +13,7 @@ Commands:
         money_format, mysql_*, FILTER_SANITIZE_STRING, ...)
 
 ------------------------------------------------------------------------------------------------
-A. php -l (8.4.27) over 88 app PHP files: 0 parse errors, 3 compile-time deprecations
+A. php -l (8.4.27) over 85 app PHP files: 0 parse errors, 3 compile-time deprecations
 ------------------------------------------------------------------------------------------------
 Deprecated: Using ${var} in strings is deprecated, use {$var} instead in ./features/anniversary/views/anniversary-mail.php on line 29
 Deprecated: CurlClient::get(): Implicitly marking parameter $params as nullable is deprecated, the explicit nullable type must be used instead in ./phplib/CurlClient.php on line 5
@@ -149,3 +149,35 @@ Not detectable statically (expect at runtime):
 Behavioural note: Slim 2's Util::encrypt()/decrypt() return data unchanged when
 extension_loaded('mcrypt') is false. The PHP 7.1 baseline image has no mcrypt, so
 'cookies.encrypt' => true was already a silent no-op before the upgrade.
+
+================================================================================================
+F. AFTER the fix loop (2026-10-27 06:43Z, commit a2f36eb): same commands
+================================================================================================
+  php -d error_reporting=E_ALL -l  over 86 app PHP files (85 + phplib/compat/slim2_php8.php): 0 findings
+  phpcs PHPCompatibility testVersion 8.4 over htdocs phplib features views tests:              0 findings
+
+Predicted vs actual (see JOURNAL.md step 5):
+  P1  index.php mcrypt constants ........ CONFIRMED (masked by polyfill; removed in 5.12)
+  P2  Slim getDefaultSettings constants .. CONFIRMED (polyfill, step 4/5.1)
+  P3  Slim get_magic_quotes_gpc() ........ CONFIRMED (polyfill, step 4/5.1)
+  P4  jira implode() order ............... CONFIRMED TypeError in phpunit (5.5)
+  P5  CurlClient implicit nullable ....... CONFIRMED (5.9)
+  P6  Persistence optional-before-req .... CONFIRMED (5.10)
+  P7  E_USER_ERROR ....................... fixed with P6 (5.10)
+  P8  ${var} interpolation ............... CONFIRMED (5.11)
+  P9  Slim SessionCookie 8.4 deprecation . CONFIRMED, accepted via runtime ini (5.1)
+  P10 Slim ContentTypes .................. NOT HIT (middleware not used)
+  P11 dependency resolution .............. CONFIRMED, and worse: Composer's advisory blocking
+                                           refused twig 1.x / phpunit 6 outright (step 3)
+  P12 PHPUnit 6 -> 11 .................... CONFIRMED: setUp(): void, file/class naming,
+                                           static providers, attributes, willReturn (5.3-5.6)
+  P13 dynamic properties ................. CONFIRMED: JiraClient, Calendar, Uploader_Webdav,
+                                           test classes (5.6-5.8)
+  P14 null-to-string / undefined key ..... CONFIRMED: 7 null-to-string (5.16), undefined key and
+                                           array-offset-on-false (5.13, 5.14), property of null (5.2)
+NOT predicted by any static tool:
+  - Slim 2's error handler turning vendor deprecations into fatal exceptions (5.1)
+  - Slack API call on every event page failing without network (5.2)
+  - PHP 8 default error_reporting change (E_ALL), so notices that 7.x hid now surface (5.13)
+  - Packagist dist downloads blocked by egress policy; merge-plugin two-pass resolve (step 4)
+  - Slim Util.php:401 rtrim(null) runtime deprecation (5.15 audit)
