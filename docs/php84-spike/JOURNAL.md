@@ -253,3 +253,13 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - After: `Tests: 7, Assertions: 7, Errors: 2, Deprecations: 8, PHPUnit Deprecations: 2`:
   TypeError from `implode()` (5.5), non-static data provider (5.6), deprecations (5.7, 5.8).
 - Category: tests. Time: 2 min.
+
+#### 5.5 `implode()` with reversed arguments → TypeError (predicted P4) — 06:08Z
+- Error: `JiraClientTest::test_getJiraApiResponse_withTickets  TypeError: implode(): Argument #1
+  ($separator) must be of type string, array given  /app/features/jira/lib.php:223`.
+- Root cause: `implode($pieces, $glue)` was deprecated in 7.4 and removed in 8.0. Found by the
+  static scan; the earlier read-only grep had missed it. Not on the smoke path (JIRA lookups
+  only run when an event has tickets), so only the unit test catches it at runtime.
+- Fix: `features/jira/lib.php:223,225` → `implode('","', $jira_key_input)`, `implode(',', $fields)`.
+- After: `Tests: 7, Assertions: 12, Errors: 1, Deprecations: 8, PHPUnit Deprecations: 2`.
+- Category: app-code. Time: 2 min.

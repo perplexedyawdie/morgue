@@ -220,9 +220,9 @@ class JiraClient {
         }
 
         $params = array(
-            'jql' => 'issuekey in ("' .  implode($jira_key_input, '","') . '")',
+            'jql' => 'issuekey in ("' .  implode('","', $jira_key_input) . '")',
             'maxResults' => $tickets_count,
-            'fields' => implode($fields, ',')
+            'fields' => implode(',', $fields)
         );
 
         $response = $this->curl_client->get($this->getJiraBaseUrl() . '/rest/api/2/search' , $params, $this->username . ':' . $this->password, $this->proxy);
