@@ -72,6 +72,14 @@ the runtime vulnerable when it OOMs or the worker dies versus a healthy control.
 the worker, the script uses a **fresh container it created and destroys afterward**. The version
 policy remains the verdict; the probe is corroboration, and disagreement is reported.
 
+**Direct OOM evidence (captured by `--active`).** Beyond the scanner's inference, `--active`
+captures the event itself into `out/evidence/` and the result JSON's `oom_evidence` block: PHP's
+own `Allowed memory size … exhausted … in Unknown` fatal (from `error_log`/stderr), the container
+memory high-water mark (cgroup `memory.max_usage_in_bytes`, race-free), the exit state and a
+liveness check. Measured A/B: vulnerable 8.4.10 → ~530 MiB peak + the fatal; fixed 8.4.27 →
+~57 MiB + none. A low-limit (128M) fallback forces the literal fatal if a 512M run crashes without
+flushing it. Full method, signature and layer distinctions: **`OOM-EVIDENCE.md`**.
+
 ## Hard guardrails (enforced in the wrapper, not advice)
 
 - **Loopback only.** There is no `--url`. The script starts the target itself and talks to

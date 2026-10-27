@@ -13,6 +13,7 @@
 | `tool-eval/measure-tools.sh` | Reproduces that measurement (offline analysis, read-only copy of the pre-fix tree) |
 | `confirm/SKILL.md` | Skill: confirm a local image's PHP2Shell susceptibility (CVE-2026-109618/-109619) |
 | `confirm/confirm-php2shell.sh` | Loopback-only: version policy (always) + opt-in disruptive OOM probe |
+| `confirm/OOM-EVIDENCE.md` | How `--active` directly captures the OOM event (fatal + memory peak + state) |
 | `confirm/vendor/php2shell-scanner/` | Pinned MIT copy of assetnote/php2shell-scanner (the detector) |
 
 Quick start: `docs/php84-spike/harness/run.sh` → `HARNESS GREEN`;
