@@ -16,6 +16,7 @@
 #   ERROR_REPORTING  error_reporting for server + phpunit (default E_ALL)
 #   MIN_PHP          runtime policy: fail if PHP_VERSION < this (default 8.4.27)
 #   PHPUNIT_FILTER   phpunit --filter (default excludes the flaky httpbin CurlClient tests)
+#   COMPOSER_ARGS    extra args for composer install (e.g. --prefer-source)
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +29,7 @@ APP_PORT="${APP_PORT:-8000}"
 ERROR_REPORTING="${ERROR_REPORTING:-E_ALL}"
 MIN_PHP="${MIN_PHP:-8.4.27}"
 PHPUNIT_FILTER="${PHPUNIT_FILTER:-/^(?!.*CurlClient)/}"
+COMPOSER_ARGS="${COMPOSER_ARGS:-}"
 DB_CT=morgue-harness-db
 APP_CT=morgue-harness-app
 BASE="http://127.0.0.1:$APP_PORT"
@@ -52,11 +54,14 @@ for v in HTTPS_PROXY https_proxy NO_PROXY no_proxy; do
   [ -n "${!v:-}" ] && NET_ARGS+=(-e "$v=${!v}")
 done
 CA="${SSL_CERT_FILE:-}"
-[ -n "$CA" ] && [ -f "$CA" ] && NET_ARGS+=(-v "$CA:/etc/harness-ca.crt:ro" -e SSL_CERT_FILE=/etc/harness-ca.crt)
+[ -n "$CA" ] && [ -f "$CA" ] && NET_ARGS+=(-v "$CA:/etc/harness-ca.crt:ro" -e SSL_CERT_FILE=/etc/harness-ca.crt -e GIT_SSL_CAINFO=/etc/harness-ca.crt)
 
 INI=(-d error_reporting="$ERROR_REPORTING" -d display_errors=On -d display_startup_errors=On
      -d log_errors=On -d error_log=/app/docs/php84-spike/harness/out/php.log)
 php_run() { docker run --rm "${NET_ARGS[@]}" -v "$REPO:/app" -w /app "$PHP_IMAGE" "$@"; }
+# Composer cache in a named volume so source/dist downloads survive between runs.
+composer_run() { docker run --rm "${NET_ARGS[@]}" -v morgue-composer-cache:/root/.composer/cache \
+                   -v "$REPO:/app" -w /app "$PHP_IMAGE" composer "$@"; }
 
 # --- 1. image -------------------------------------------------------------
 if [ "${SKIP_BUILD:-0}" != 1 ]; then
@@ -79,8 +84,13 @@ php_run php -m | grep -qx pdo_mysql && ok "pdo_mysql loaded" || bad "pdo_mysql m
 # --- 2. dependencies --------------------------------------------------------
 if [ "${SKIP_COMPOSER:-0}" != 1 ]; then
   log "composer install"
-  if php_run composer install --no-interaction --no-progress > "$OUT/composer.log" 2>&1; then
+  # Restricted egress (sandboxes, some CI) may refuse GitHub API zipball downloads while
+  # allowing plain git reads; fall back to installing from source in that case.
+  if composer_run install --no-interaction --no-progress $COMPOSER_ARGS > "$OUT/composer.log" 2>&1; then
     ok "composer install"
+  elif grep -q 'Could not authenticate against github.com\|Failed to download .* from dist' "$OUT/composer.log" \
+       && composer_run install --no-interaction --no-progress --prefer-source $COMPOSER_ARGS > "$OUT/composer.log" 2>&1; then
+    ok "composer install (--prefer-source fallback: GitHub dist downloads refused)"
   else
     tail -40 "$OUT/composer.log"; bad "composer install"; exit 1
   fi

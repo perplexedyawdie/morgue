@@ -120,3 +120,33 @@ Entry format: commands → exact error → root cause → fix → category
   2.2 LTS, which only audits after install). It is handled by step 4 (remove Twig, move PHPUnit).
   Category: dependency. 1 min.
 - Category: runtime. Time: 4 min total.
+
+### 4. Dependencies (composer.json) — 2026-10-27T05:42Z (WIP)
+- New `composer.json`: `php: ">=8.4.27 <8.5"`, `config.platform.php: "8.4.27"`, `slim/slim: 2.6.3`
+  (exact; abandoned), `wikimedia/composer-merge-plugin: ^2.1` (was `dev-master`) with
+  `config.allow-plugins`, `phpunit/phpunit: ^11` (was `^6`), `twig/twig` **removed**.
+  `features/upload/composer.json` (merged in by the plugin): `sabre/dav: ^4.7` (was `~2.1.1`).
+  `composer.lock` removed from `.gitignore` so the lock can be committed.
+- Twig check: `grep -rni twig` outside composer.json/docs/vendor → 0 hits. Views are plain PHP.
+  Removing it also removes 19 Packagist advisories (the step 3 resolution blocker).
+- sabre/dav check: only `features/upload/lib/webdav.php` uses it (`use Sabre\DAV\Client`,
+  `new Client([...baseUri, userName, password, proxy])`, `->request()` returning
+  `statusCode`/`headers`). Same constructor keys and `request()` shape in 4.x.
+- Failure 4a: `composer update` resolved fine, then every download failed:
+  ```
+  Failed to download slim/slim from dist: Could not authenticate against github.com
+  Source fallback is disabled. Not trying alternative sources.
+  ```
+  `curl https://api.github.com/repos/slimphp/Slim/zipball/<sha>` → 403 "GitHub access to this
+  repository is not enabled for this session". Root cause: the sandbox egress policy allows
+  anonymous **git** reads of public GitHub repos but not GitHub **API** zipball downloads,
+  which is where Packagist points every dist. A token in `COMPOSER_AUTH` did not help (policy,
+  not auth). Fix: `composer install --prefer-source` (git clones through the proxy, with
+  `GIT_SSL_CAINFO` for the proxy CA). Much slower (full `git clone --mirror` per package,
+  ~5 min for 29 packages), so the harness now keeps the Composer cache in a named volume
+  (`morgue-composer-cache`) and only falls back to `--prefer-source` when the dist error
+  appears. Category: infra. Time: 8 min.
+- Failure 4b (observed in the lock): first `composer update` produced a lock WITHOUT
+  `sabre/dav`. Root cause: composer-merge-plugin was not installed yet when the root package
+  was resolved, so `features/upload/composer.json` was never merged. Fix: run
+  `composer update` a second time once the plugin is installed. Category: dependency.
