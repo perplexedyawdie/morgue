@@ -3,6 +3,10 @@
 $app->get('/history/:event_id/:history_id', function($event_id, $history_id) use ($app) {
     $event = Postmortem::get_event($event_id);
     $history = Postmortem::get_history_event($history_id);
+    if (is_null($event["id"]) || $history["status"] != Postmortem::OK) {
+        $app->response->status(404);
+        return;
+    }
 
     $timezone = getUserTimezone();
     $tz = new DateTimeZone($timezone);

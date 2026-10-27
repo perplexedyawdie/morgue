@@ -621,6 +621,9 @@ class Postmortem {
             $stmt = $conn->prepare($sql);
             $stmt->execute(array("id" => $id));
             $history = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($history === false) {
+                return array("status" => self::ERROR, "error" => "History entry not found.");
+            }
             $history["status"] = self::OK;
             return $history;
         } catch(PDOException $e) {

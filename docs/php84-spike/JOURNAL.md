@@ -367,3 +367,17 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   when the row is missing. Both callers already handle `id === null`.
 - After: `/events/999`, `/events/999/{summary,tldr,why_surprised}` → 404.
 - Category: app-code. Time: 5 min.
+
+#### 5.14 Unknown id on `/events/:id/lock` and `/history/:event_id/:history_id` → 500 — 06:30Z
+- Errors (route crawl): `GET /events/999/lock` → 500 "Undefined array key "created" File:
+  /app/phplib/Postmortem.php Line: 142"; `GET /history/999/999` → 500 "Undefined array key
+  "create_date" File: /app/features/history/routes.php Line: 10".
+- Root cause: undefined index went from E_NOTICE (filtered out by the 7.x default error_reporting)
+  to E_WARNING in 8.0. Also hidden: `get_history_event()` did `$history = false; $history["status"]
+  = OK`, i.e. false-to-array autovivification, deprecated in 8.1 (silenced on the web path). On 7.1
+  these routes answered 200 with garbage (and `lock` would set an edit lock on a non-existent id).
+- Fix: `get_history_event()` returns `status => ERROR` when the row is missing; the history route
+  and the lock route return 404 when the event (or history entry) does not exist.
+- After: `/events/999/lock`, `/history/999/999`, `/history/1/999` → 404; `/events/1/lock` → 200
+  `{"status":0,"modifier":"morgue_user"}`; `/history/1/1` → 200.
+- Category: app-code. Time: 4 min.

@@ -317,7 +317,11 @@ $app->get('/events/:id/summary', function($id) use ($app) {
 $app->get('/events/:id/lock', function($id) use ($app) {
     header("Content-Type: application/json");
     $event = Postmortem::get_event($id);
-    
+    if (is_null($event["id"])) {
+        $app->response->status(404);
+        return;
+    }
+
     $status = Postmortem::get_event_edit_status($event);
     
     if($status === Postmortem::EDIT_UNLOCKED) {
