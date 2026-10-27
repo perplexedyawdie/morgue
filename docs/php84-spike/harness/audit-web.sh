@@ -4,9 +4,10 @@
 # Why: Slim 2's error handler throws on every enabled level and silently swallows the rest,
 # so with the accepted runtime config (E_ALL & ~E_DEPRECATED) app-code deprecations on the web
 # path are invisible, and at E_ALL Slim's own deprecations kill every request. This script
-# patches the LOCAL vendor copy of Slim::handleErrors() for the duration of the run so that
-# deprecations are logged and execution continues, serves at E_ALL, exercises every route
-# (GET + writes), restores the vendor file, and reports anything outside vendor/.
+# writes a patched copy of Slim::handleErrors() (log deprecations, continue) to the output
+# dir and bind-mounts it read-only over vendor/slim/slim/Slim/Slim.php inside the audit
+# container only — vendor/ on disk is never modified (checked by hash). It then serves at
+# E_ALL, exercises every route (GET + writes) and reports anything outside vendor/.
 #
 #   docs/php84-spike/harness/audit-web.sh      (runs run.sh first with KEEP=1)
 set -uo pipefail
@@ -19,19 +20,20 @@ KEEP=1 SKIP_BUILD="${SKIP_BUILD:-1}" SKIP_COMPOSER="${SKIP_COMPOSER:-1}" "$HERE/
   || { tail -20 "$OUT/../audit-run.log"; echo "run.sh failed"; exit 1; }
 mv "$OUT/../audit-run.log" "$OUT/audit-run.log"
 
-cp "$SLIM" "$OUT/Slim.php.orig"
-restore() { cp "$OUT/Slim.php.orig" "$SLIM"; docker rm -f morgue-harness-app morgue-harness-db >/dev/null 2>&1; }
-trap restore EXIT
-docker run --rm -v "$REPO:/app" -w /app "$PHP_IMAGE" php -r '
-  $f = "vendor/slim/slim/Slim/Slim.php"; $s = file_get_contents($f);
+SLIM_SHA=$(sha256sum "$SLIM" | cut -d' ' -f1)
+cleanup() { docker rm -f morgue-harness-app morgue-harness-db >/dev/null 2>&1; }
+trap cleanup EXIT
+docker run --rm -v "$REPO/vendor/slim/slim/Slim:/src:ro" -v "$OUT:/out" "$PHP_IMAGE" php -r '
+  $s = file_get_contents("/src/Slim.php");
   $needle = "        if (!(\$errno & error_reporting())) {";
   $add = "        if (\$errno & (E_DEPRECATED | E_USER_DEPRECATED)) { error_log(\"PHP Deprecated:  \$errstr in \$errfile on line \$errline\"); return true; } // AUDIT\n";
   if (strpos($s, $needle) === false) { fwrite(STDERR, "patch point not found\n"); exit(1); }
-  file_put_contents($f, str_replace($needle, $add.$needle, $s));' || exit 1
+  file_put_contents("/out/Slim.audit.php", str_replace($needle, $add.$needle, $s));' || exit 1
 
 docker rm -f morgue-harness-app >/dev/null 2>&1
 : > "$OUT/php.log"
 docker run -d --name morgue-harness-app --network host -v "$REPO:/app" -w /app/htdocs \
+  -v "$OUT/Slim.audit.php:/app/vendor/slim/slim/Slim/Slim.php:ro" \
   -e MORGUE_ENVIRONMENT=development "$PHP_IMAGE" php -d error_reporting=E_ALL -d display_errors=Off \
   -d log_errors=On -d error_log=/app/docs/php84-spike/harness/out/php.log \
   -d include_path=".:/app:/app/features" -S "127.0.0.1:$APP_PORT" >/dev/null
@@ -59,12 +61,16 @@ req GET    /history/1/1
 req POST   /events/1/tags -d 'tags=Alpha, beta'
 req DELETE /events/1/tags/1
 req POST   /events/1/forum_links -d forum_link=http://example.invalid/f -d forum_comment=c
+req GET    /events/1/forum_links/1
 req DELETE /events/1/forum_links/1
 req POST   /events/1/images -d images=http://example.invalid/a.png
+req GET    /events/1/images/1
 req DELETE /events/1/images/1
 req POST   /events/1/slack-channels -d channel_id=C1 -d channel_name=incident
+req GET    /events/1/slack-channels/1
 req DELETE /events/1/slack-channels/1
 req POST   /events/1/tickets -d tickets=FOO-1
+req GET    /events/1/tickets/1
 req DELETE /events/1/tickets/1
 req POST   /timezone -d timezone=UTC
 req DELETE /events/2
@@ -75,6 +81,8 @@ sleep 0.5
 echo; echo "== PHP log entries outside vendor/ (E_ALL):"
 grep -E 'PHP ' "$OUT/php.log" | grep -v '/app/vendor/' | sed 's/^\[[^]]*\] //' | sort | uniq -c | sort -rn | tee "$OUT/audit-findings.txt"
 echo "== vendor entries (accepted):"; grep -E 'PHP ' "$OUT/php.log" | grep '/app/vendor/' | sed 's/^\[[^]]*\] //' | sort | uniq -c | sort -rn | head -30
+[ "$(sha256sum "$SLIM" | cut -d' ' -f1)" = "$SLIM_SHA" ] || { echo "vendor Slim.php changed on disk!"; exit 1; }
+grep -q 'vendor/slim/slim/Slim/' "$OUT/php.log" || { echo "audit patch not active (no vendor deprecations logged)"; exit 1; }
 n=$(wc -l < "$OUT/audit-findings.txt"); f=$(grep -c '^5' "$OUT/audit-requests.txt")
 echo "== app findings: $n, 5xx responses: $f"
 [ "$n" = 0 ] && [ "$f" = 0 ]

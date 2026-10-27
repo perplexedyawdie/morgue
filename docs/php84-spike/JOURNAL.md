@@ -529,3 +529,20 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
 - Verification: Rector-only tree → `FAIL phpunit`; this branch → `PASS phpunit: OK (11 tests, 16
   assertions)`, `HARNESS GREEN`.
 - Category: tests. Time: 2 min.
+
+#### 5.20 Web audit no longer edits vendor/; crawl covers single-item GETs — 07:05Z
+- Problem: `audit-web.sh` (5.15) patched `vendor/slim/slim/Slim/Slim.php` in place and restored it from
+  a trap. That breaks the "never edit vendor/" guardrail in netresearch/php-modernization-skill, and it
+  bit here: the measurement copy (`tool-eval/measure-tools.sh`) hardlinks vendor/, so an in-place write
+  would have changed the measured tree too. It is also not crash-safe (a SIGKILL skips the trap).
+- Fix: the audit now writes the patched handler to `harness/out/Slim.audit.php` and bind-mounts it
+  read-only over `vendor/slim/slim/Slim/Slim.php` inside the audit container only. The script records
+  the file's sha256 first and fails if it changed, and it also fails if no vendor deprecation was logged
+  (patch not active). The crawl gained `GET /events/1/{forum_links,images,slack-channels,tickets}/1`
+  (the gap that hid 5.18).
+- Verification: `audit-web.sh` → exit 0, 45 requests, 0 app findings, 0 × 5xx, vendor deprecations
+  logged (patch live), `Slim.php` sha256 `7b84c7f6b1d181ff…` before = after, `git status` clean in vendor/.
+- Observation: all four single-item GETs answer 404 for existing rows. That is the pre-existing
+  `Persistence::get_association_by_id()` bug from 5.18 (no `WHERE`), shared by the links, images, jira,
+  slack and irc features. Same on 7.1; it's a follow-up.
+- Category: tooling. Time: 5 min.
