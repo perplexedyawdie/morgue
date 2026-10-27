@@ -5,6 +5,8 @@ Chronological log of the hand-done upgrade of etsy/morgue to PHP 8.4.27
 Branch: `spike/php84` on `perplexedyawdie/morgue`. Every entry is committed and
 pushed as soon as it is written.
 
+Times are wall-clock, taken from commit timestamps (session 2 started 05:33Z).
+
 Entry format: commands → exact error → root cause → fix → category
 (runtime / dependency / framework-vendor / app-code / tests / tooling / infra) → time.
 
@@ -43,7 +45,7 @@ Entry format: commands → exact error → root cause → fix → category
   which the earlier read-only scan did not list.
 - Category: tooling. Time: 5 min.
 
-### 1. Acceptance harness — 2026-10-27T05:40Z
+### 1. Acceptance harness — 2026-10-27T05:36Z
 - Added `docs/php84-spike/harness/run.sh` (one command: `docs/php84-spike/harness/run.sh`).
   Steps: build the repo-root `Dockerfile` → `php -v` + runtime policy (`PHP_VERSION >= 8.4.27`)
   + `pdo_mysql` loaded → `composer install` → MariaDB 10.4 container on host network, schemas
@@ -62,9 +64,9 @@ Entry format: commands → exact error → root cause → fix → category
 - Not yet runnable: the Dockerfile arrives in step 3. Deprecations are treated as failures
   unless suppressed through `ERROR_REPORTING` (runtime config), which keeps any accepted
   vendor deprecation explicit.
-- Category: tooling. Time: 15 min.
+- Category: tooling. Time: 3 min.
 
-### 2. Static compatibility scan (no code changed) — 2026-10-27T05:55Z
+### 2. Static compatibility scan (no code changed) — 2026-10-27T05:39Z
 - Commands (all in `php:8.4.27-cli`): `php -l` on all 88 non-vendor PHP files; phpcs 3 +
   `phpcompatibility/php-compatibility` **10.0.0-alpha2** (`--runtime-set testVersion 8.4`)
   over htdocs, phplib, features, views, tests; the same phpcs run over `slim/slim` 2.6.3
@@ -85,9 +87,9 @@ Entry format: commands → exact error → root cause → fix → category
   failures, PHPUnit API changes or dynamic-property/null-to-string runtime deprecations.
 - Behavioural finding: Slim 2's cookie `encrypt()` is a no-op when ext/mcrypt is absent, and
   the 7.1 image had no mcrypt, so `cookies.encrypt => true` never encrypted anything.
-- Category: tooling. Time: 15 min.
+- Category: tooling. Time: 3 min.
 
-### 3. Runtime: Dockerfile for PHP 8.4.27 — 2026-10-27T06:10Z
+### 3. Runtime: Dockerfile for PHP 8.4.27 — 2026-10-27T05:40Z
 - Added repo-root `Dockerfile`: `FROM php:8.4.27-cli` (exact patch pin), `git` + `unzip`
   (Composer needs one of unzip/ext-zip to extract dists), `docker-php-ext-install pdo_mysql`,
   `COPY --from=composer:2.10.3` (latest Composer 2 on 2026-10-27), `COMPOSER_ALLOW_SUPERUSER=1`.
@@ -97,11 +99,11 @@ Entry format: commands → exact error → root cause → fix → category
 - Failure 3a: `docker build` → `failed to resolve source metadata for
   docker.io/library/composer:2.10.3: … 429 Too Many Requests`. Root cause: anonymous Docker
   Hub pull rate limit (shared sandbox egress IP). Fix: pulled `composer:2` once (succeeded on
-  retry, = 2.10.3) and `docker tag composer:2 composer:2.10.3` locally. Category: infra. 5 min.
+  retry, = 2.10.3) and `docker tag composer:2 composer:2.10.3` locally. Category: infra. 1 min.
 - Failure 3b: `apt-get update` in a container → `Could not resolve 'deb.debian.org'`. Root
   cause: the sandbox allows only HTTPS via its proxy. Fix: Dockerfile rewrites apt sources to
   `https://deb.debian.org` and trusts `docker/extra-ca/*.crt`; build uses `--network host`
-  and `--build-arg HTTPS_PROXY`. Category: infra. 5 min.
+  and `--build-arg HTTPS_PROXY`. Category: infra. 1 min.
 - Verified: `php -v` → `PHP 8.4.27 (cli) (built: Oct 21 2026 15:53:07) (NTS)`; `pdo_mysql`
   loaded; `Composer version 2.10.3 2026-08-27`.
 - First harness run on 8.4.27 with the UNCHANGED composer.json → RED at `composer install`:
@@ -116,5 +118,5 @@ Entry format: commands → exact error → root cause → fix → category
   any version with a Packagist security advisory during resolution. It fails before any PHP
   version constraint is even considered. This is new compared with the 7.1 baseline (Composer
   2.2 LTS, which only audits after install). It is handled by step 4 (remove Twig, move PHPUnit).
-  Category: dependency. 5 min.
-- Category: runtime. Time: 25 min total.
+  Category: dependency. 1 min.
+- Category: runtime. Time: 4 min total.
