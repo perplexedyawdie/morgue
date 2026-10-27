@@ -63,3 +63,26 @@ Entry format: commands → exact error → root cause → fix → category
   unless suppressed through `ERROR_REPORTING` (runtime config), which keeps any accepted
   vendor deprecation explicit.
 - Category: tooling. Time: 15 min.
+
+### 2. Static compatibility scan (no code changed) — 2026-10-27T05:55Z
+- Commands (all in `php:8.4.27-cli`): `php -l` on all 88 non-vendor PHP files; phpcs 3 +
+  `phpcompatibility/php-compatibility` **10.0.0-alpha2** (`--runtime-set testVersion 8.4`)
+  over htdocs, phplib, features, views, tests; the same phpcs run over `slim/slim` 2.6.3
+  fetched into a scratch dir (vendor is where the known blocker lives, so scan it too).
+- Results saved in `docs/php84-spike/static-scan.txt`, section E = predicted breakage list.
+- App: 0 parse errors. Errors: mcrypt constants (index.php:28-29), reversed `implode()` args
+  (features/jira/lib.php:223,225 → TypeError in 8.0, contradicting the earlier read-only scan's
+  "no removed functions in app code"). Deprecations: implicit nullable (CurlClient.php:5),
+  optional-before-required (Persistence.php:230), `E_USER_ERROR` (Persistence.php:251),
+  `${var}` interpolation (anniversary-mail.php:29).
+- Slim 2.6.3: `get_magic_quotes_gpc()` (Util.php:60) as expected, **plus** mcrypt constants
+  in `Slim::getDefaultSettings()` (Slim.php:306-307) — evaluated on every `new \Slim\Slim()`,
+  so a polyfill must define the constants as well, not just the function. Also 8.4
+  `session_set_save_handler()` callable-form deprecation in `SessionCookie`, which
+  index.php:95 adds on every request.
+- Tooling note: PHPCompatibility 9.3.5 (the last stable, 2019) has no PHP 8.1–8.4 sniffs; only
+  the 10.0 alpha found the 8.2/8.4 items. Static scans can't see dependency-resolution
+  failures, PHPUnit API changes or dynamic-property/null-to-string runtime deprecations.
+- Behavioural finding: Slim 2's cookie `encrypt()` is a no-op when ext/mcrypt is absent, and
+  the 7.1 image had no mcrypt, so `cookies.encrypt => true` never encrypted anything.
+- Category: tooling. Time: 15 min.

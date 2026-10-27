@@ -1,0 +1,151 @@
+Static compatibility scan — morgue (PHP 7.1 code) against PHP 8.4.27, BEFORE any code change
+================================================================================================
+Date: 2026-10-27   Commit scanned: a191b66 (= etsy/morgue d37ae8c + spike docs)
+Runtime for all tools: docker image php:8.4.27-cli (PHP 8.4.27, built Oct 21 2026)
+Tools: php -l (8.4.27); squizlabs/php_codesniffer 3.x + phpcompatibility/php-compatibility 10.0.0-alpha2
+       (9.3.5 stable has no PHP 8.1-8.4 sniffs, so 10.0 alpha is the useful one)
+Commands:
+  find . -name '*.php' -not -path './vendor/*' | xargs -n1 php -l
+  phpcs -p -s --standard=PHPCompatibility --runtime-set testVersion 8.4 --extensions=php \
+        htdocs phplib features views tests
+  phpcs ... (same) vendor/slim/slim/Slim       # slim/slim 2.6.3 fetched into a scratch dir
+  grep for removed functions (each, create_function, mcrypt_*, utf8_encode, strftime,
+        money_format, mysql_*, FILTER_SANITIZE_STRING, ...)
+
+------------------------------------------------------------------------------------------------
+A. php -l (8.4.27) over 88 app PHP files: 0 parse errors, 3 compile-time deprecations
+------------------------------------------------------------------------------------------------
+Deprecated: Using ${var} in strings is deprecated, use {$var} instead in ./features/anniversary/views/anniversary-mail.php on line 29
+Deprecated: CurlClient::get(): Implicitly marking parameter $params as nullable is deprecated, the explicit nullable type must be used instead in ./phplib/CurlClient.php on line 5
+Deprecated: Persistence::get_array(): Optional parameter $where declared before required parameter $table_name is implicitly treated as a required parameter in ./phplib/Persistence.php on line 230
+
+------------------------------------------------------------------------------------------------
+B. phpcs PHPCompatibility, testVersion 8.4, app code (htdocs phplib features views tests)
+   5 files, 4 errors, 4 warnings
+------------------------------------------------------------------------------------------------
+FILE: htdocs/index.php
+--------------------------------------------------------------------------------------------------------------------------------------------
+FOUND 2 ERRORS AFFECTING 2 LINES
+--------------------------------------------------------------------------------------------------------------------------------------------
+ 28 | ERROR | The constant "MCRYPT_RIJNDAEL_256" is deprecated since PHP 7.1 and removed since PHP 7.2
+    |       | (PHPCompatibility.Constants.RemovedConstants.mcrypt_rijndael_256DeprecatedRemoved)
+ 29 | ERROR | The constant "MCRYPT_MODE_CBC" is deprecated since PHP 7.1 and removed since PHP 7.2
+    |       | (PHPCompatibility.Constants.RemovedConstants.mcrypt_mode_cbcDeprecatedRemoved)
+--------------------------------------------------------------------------------------------------------------------------------------------
+FILE: phplib/Persistence.php
+--------------------------------------------------------------------------------------------------------------------------------------------
+FOUND 0 ERRORS AND 2 WARNINGS AFFECTING 2 LINES
+--------------------------------------------------------------------------------------------------------------------------------------------
+ 230 | WARNING | Declaring an optional parameter before a required parameter is deprecated since PHP 8.0. Parameter $where is optional,
+     |         | while parameter $table_name is required. The $where parameter is implicitly treated as a required parameter.
+     |         | (PHPCompatibility.FunctionDeclarations.RemovedOptionalBeforeRequiredParam.Deprecated80)
+ 251 | WARNING | Passing E_USER_ERROR to trigger_error() is deprecated since 8.4. Throw an exception or call exit with a string message
+     |         | instead. (PHPCompatibility.ParameterValues.RemovedTriggerErrorLevel.Deprecated)
+--------------------------------------------------------------------------------------------------------------------------------------------
+FILE: phplib/CurlClient.php
+--------------------------------------------------------------------------------------------------------------------------------------------
+FOUND 0 ERRORS AND 1 WARNING AFFECTING 1 LINE
+--------------------------------------------------------------------------------------------------------------------------------------------
+ 5 | WARNING | Implicitly marking a parameter as nullable is deprecated since PHP 8.4. Update the type to be explicitly nullable instead.
+   |         | Found implicitly nullable parameter: $params.
+   |         | (PHPCompatibility.FunctionDeclarations.RemovedImplicitlyNullableParam.Deprecated)
+--------------------------------------------------------------------------------------------------------------------------------------------
+FILE: features/jira/lib.php
+--------------------------------------------------------------------------------------------------------------------------------------------
+FOUND 2 ERRORS AFFECTING 2 LINES
+--------------------------------------------------------------------------------------------------------------------------------------------
+ 223 | ERROR | Passing the $glue and $pieces parameters in reverse order to implode has been deprecated since PHP 7.4 and is removed since
+     |       | PHP 8.0; $glue should be the first parameter and $pieces the second
+     |       | (PHPCompatibility.ParameterValues.RemovedImplodeFlexibleParamOrder.Removed)
+ 225 | ERROR | Passing the $glue and $pieces parameters in reverse order to implode has been deprecated since PHP 7.4 and is removed since
+     |       | PHP 8.0; $glue should be the first parameter and $pieces the second
+     |       | (PHPCompatibility.ParameterValues.RemovedImplodeFlexibleParamOrder.Removed)
+--------------------------------------------------------------------------------------------------------------------------------------------
+FILE: features/anniversary/views/anniversary-mail.php
+--------------------------------------------------------------------------------------------------------------------------------------------
+FOUND 0 ERRORS AND 1 WARNING AFFECTING 1 LINE
+--------------------------------------------------------------------------------------------------------------------------------------------
+ 29 | WARNING | Using ${var} in strings is deprecated since PHP 8.2, use {$var} instead. Found: ${subject}
+    |         | (PHPCompatibility.TextStrings.RemovedDollarBraceStringEmbeds.DeprecatedVariableSyntax)
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------------
+C. phpcs PHPCompatibility, testVersion 8.4, vendor slim/slim 2.6.3 (Slim/)
+------------------------------------------------------------------------------------------------
+Slim/Middleware/SessionCookie.php:97:13: warning - The "read" parameter for function session_set_save_handler() is deprecated since PHP 8.4; Use a SessionHandlerInterface implementation for the callbacks instead instead (PHPCompatibility.FunctionUse.RemovedFunctionParameters.session_set_save_handler_readDeprecated)
+Slim/Middleware/SessionCookie.php:98:13: warning - The "write" parameter for function session_set_save_handler() is deprecated since PHP 8.4; Use a SessionHandlerInterface implementation for the callbacks instead instead (PHPCompatibility.FunctionUse.RemovedFunctionParameters.session_set_save_handler_writeDeprecated)
+Slim/Middleware/SessionCookie.php:99:13: warning - The "destroy" parameter for function session_set_save_handler() is deprecated since PHP 8.4; Use a SessionHandlerInterface implementation for the callbacks instead instead (PHPCompatibility.FunctionUse.RemovedFunctionParameters.session_set_save_handler_destroyDeprecated)
+Slim/Middleware/SessionCookie.php:100:13: warning - The "gc" parameter for function session_set_save_handler() is deprecated since PHP 8.4; Use a SessionHandlerInterface implementation for the callbacks instead instead (PHPCompatibility.FunctionUse.RemovedFunctionParameters.session_set_save_handler_gcDeprecated)
+Slim/Middleware/ContentTypes.php:140:27: warning - Function libxml_disable_entity_loader() is deprecated since PHP 8.0 (PHPCompatibility.FunctionUse.RemovedFunctions.libxml_disable_entity_loaderDeprecated)
+Slim/Middleware/ContentTypes.php:142:17: warning - Function libxml_disable_entity_loader() is deprecated since PHP 8.0 (PHPCompatibility.FunctionUse.RemovedFunctions.libxml_disable_entity_loaderDeprecated)
+Slim/Middleware/ContentTypes.php:167:25: warning - The $escape parameter must be passed when calling fgetcsv() as its default value will change in a future PHP version. (PHPCompatibility.ParameterValues.RemovedProprietaryCSVEscaping.DeprecatedParamNotPassed)
+Slim/Http/Util.php:60:51: error - Function get_magic_quotes_gpc() is deprecated since PHP 7.4 and removed since PHP 8.0 (PHPCompatibility.FunctionUse.RemovedFunctions.get_magic_quotes_gpcDeprecatedRemoved)
+Slim/Http/Util.php:100:28: error - The constant "MCRYPT_RIJNDAEL_256" is deprecated since PHP 7.1 and removed since PHP 7.2 (PHPCompatibility.Constants.RemovedConstants.mcrypt_rijndael_256DeprecatedRemoved)
+Slim/Http/Util.php:101:23: error - The constant "MCRYPT_MODE_CBC" is deprecated since PHP 7.1 and removed since PHP 7.2 (PHPCompatibility.Constants.RemovedConstants.mcrypt_mode_cbcDeprecatedRemoved)
+Slim/Http/Util.php:106:19: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:106:19: error - Function mcrypt_module_open() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_module_openDeprecatedRemoved)
+Slim/Http/Util.php:109:19: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:109:19: error - Function mcrypt_enc_get_iv_size() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_enc_get_iv_sizeDeprecatedRemoved)
+Slim/Http/Util.php:115:20: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:115:20: error - Function mcrypt_enc_get_key_size() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_enc_get_key_sizeDeprecatedRemoved)
+Slim/Http/Util.php:121:9: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:121:9: error - Function mcrypt_generic_init() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_generic_initDeprecatedRemoved)
+Slim/Http/Util.php:122:17: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:122:17: error - Function mcrypt_generic() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_genericDeprecatedRemoved)
+Slim/Http/Util.php:123:9: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:123:9: error - Function mcrypt_generic_deinit() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_generic_deinitDeprecatedRemoved)
+Slim/Http/Util.php:150:28: error - The constant "MCRYPT_RIJNDAEL_256" is deprecated since PHP 7.1 and removed since PHP 7.2 (PHPCompatibility.Constants.RemovedConstants.mcrypt_rijndael_256DeprecatedRemoved)
+Slim/Http/Util.php:151:23: error - The constant "MCRYPT_MODE_CBC" is deprecated since PHP 7.1 and removed since PHP 7.2 (PHPCompatibility.Constants.RemovedConstants.mcrypt_mode_cbcDeprecatedRemoved)
+Slim/Http/Util.php:156:19: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:156:19: error - Function mcrypt_module_open() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_module_openDeprecatedRemoved)
+Slim/Http/Util.php:159:19: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:159:19: error - Function mcrypt_enc_get_iv_size() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_enc_get_iv_sizeDeprecatedRemoved)
+Slim/Http/Util.php:165:20: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:165:20: error - Function mcrypt_enc_get_key_size() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_enc_get_key_sizeDeprecatedRemoved)
+Slim/Http/Util.php:171:9: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:171:9: error - Function mcrypt_generic_init() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_generic_initDeprecatedRemoved)
+Slim/Http/Util.php:172:27: error - Function mdecrypt_generic() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mdecrypt_genericDeprecatedRemoved)
+Slim/Http/Util.php:174:9: error - Extension 'mcrypt' is deprecated since PHP 7.1 and removed since PHP 7.2; Use openssl (preferred) or pecl/mcrypt once available instead (PHPCompatibility.Extensions.RemovedExtensions.mcryptDeprecatedRemoved)
+Slim/Http/Util.php:174:9: error - Function mcrypt_generic_deinit() is deprecated since PHP 7.1 and removed since PHP 7.2; Use OpenSSL instead (PHPCompatibility.FunctionUse.RemovedFunctions.mcrypt_generic_deinitDeprecatedRemoved)
+Slim/Slim.php:306:33: error - The constant "MCRYPT_RIJNDAEL_256" is deprecated since PHP 7.1 and removed since PHP 7.2 (PHPCompatibility.Constants.RemovedConstants.mcrypt_rijndael_256DeprecatedRemoved)
+Slim/Slim.php:307:38: error - The constant "MCRYPT_MODE_CBC" is deprecated since PHP 7.1 and removed since PHP 7.2 (PHPCompatibility.Constants.RemovedConstants.mcrypt_mode_cbcDeprecatedRemoved)
+Slim/Slim.php:1202:21: warning - Since PHP 7.0, functions inspecting arguments, like func_get_args(), no longer report the original value as passed to a parameter, but will instead provide the current value. The parameter "$name" was used, and possibly changed (by reference), on line 1194. (PHPCompatibility.FunctionUse.ArgumentFunctionsReportCurrentValue.NeedsInspection)
+
+------------------------------------------------------------------------------------------------
+D. grep for removed/deprecated functions in app code
+------------------------------------------------------------------------------------------------
+No hits (the only "split(" matches are JavaScript inside features/calendar/views/*.php).
+
+------------------------------------------------------------------------------------------------
+E. PREDICTED BREAKAGE LIST (to be confirmed or refuted by the fix loop; see JOURNAL.md)
+------------------------------------------------------------------------------------------------
+Fatal on PHP 8 (Error / TypeError):
+ P1  htdocs/index.php:28-29  MCRYPT_RIJNDAEL_256 / MCRYPT_MODE_CBC: undefined constant.
+     7.x: warning + string "assumed"; 8.0+: Error. App and Slim both use them.
+ P2  vendor slim/slim Slim/Slim.php:306-307  same constants in Slim::getDefaultSettings(),
+     which runs on every `new \Slim\Slim()` -> every request fatals even if app passes its own.
+ P3  vendor slim/slim Slim/Http/Util.php:60  get_magic_quotes_gpc() removed in 8.0 -> every
+     request that reads input fatals.
+ P4  features/jira/lib.php:223,225  implode($array, $glue) (reversed args) -> TypeError in 8.0.
+     Only on the JIRA path; not covered by the smoke or (probably) unit tests -> check tests.
+Deprecations (E_DEPRECATED on 8.4, must be fixed in app code):
+ P5  phplib/CurlClient.php:5  implicitly nullable `array $params = null` (8.4).
+ P6  phplib/Persistence.php:230  optional $where before required $table_name (8.0).
+ P7  phplib/Persistence.php:251  trigger_error(..., E_USER_ERROR) deprecated (8.4).
+ P8  features/anniversary/views/anniversary-mail.php:29  "${subject}" string interpolation (8.2).
+Vendor deprecations (Slim 2.6.3; only fire on code paths morgue may not use):
+ P9  Slim/Middleware/SessionCookie.php:97-100 session_set_save_handler() callables (8.4)
+     -> htdocs/index.php:95 DOES add SessionCookie, so this fires on every request.
+ P10 Slim/Middleware/ContentTypes.php:140-167 libxml_disable_entity_loader (8.0), fgetcsv
+     $escape (8.4) -> only if ContentTypes middleware is used.
+Not detectable statically (expect at runtime):
+ P11 Dependency resolution: twig/twig 1.*, sabre/dav ~2.1.1, phpunit ^6 and
+     wikimedia/composer-merge-plugin dev-master do not install on PHP 8.4.
+ P12 PHPUnit 6 -> 11: setUp(): void signatures, assert* API changes, test class naming
+     (Contact_Test.php holds class ContactTest), --include-path semantics.
+ P13 Dynamic property creation (8.2 deprecation) in app classes and in Slim 2.
+ P14 null passed to non-nullable internal string params (8.1 deprecation), count() on
+     non-countables (8.0 TypeError), undefined array keys (8.0 warning, was notice).
+Behavioural note: Slim 2's Util::encrypt()/decrypt() return data unchanged when
+extension_loaded('mcrypt') is false. The PHP 7.1 baseline image has no mcrypt, so
+'cookies.encrypt' => true was already a silent no-op before the upgrade.
