@@ -546,3 +546,20 @@ against a read-only export of `2314b75` plus the identical vendor/ (composer.jso
   `Persistence::get_association_by_id()` bug from 5.18 (no `WHERE`), shared by the links, images, jira,
   slack and irc features. Same on 7.1; it's a follow-up.
 - Category: tooling. Time: 5 min.
+
+#### 5.21 Measurement result: Rector / PHPStan vs the hand-made fixes — 07:15Z
+- Commands: `docs/php84-spike/tool-eval/measure-tools.sh 2314b75 <workdir>` (fresh clones of PHPStan
+  2.3.2, phpstan-deprecation-rules 2.0.5, Rector 2.8.1 via git; offline Composer path-repo project;
+  all analysis `--network none`). Rerun twice from scratch: identical output.
+- Result (full matrix in `tool-eval/RESULTS.md`; 20 ground-truth items G01–G20):
+  - PHPStan level 0: 8 items, 47 findings, 4 false positives; the dynamic properties and the missed
+    G20. Level 5: 11 items / 279 findings. Level 10: 14 items / 1,802 findings, the extra ones only as
+    generic `mixed`.
+  - Rector: full sets (B) fix 8 items but touch 40 files; the targeted config (D) fixes the same 8 in
+    6 files (+10/−12 lines). `NullToStrictStringFuncCallArgRector` doesn't fire on untyped Slim
+    getters; `CompleteDynamicPropertiesRector` is deprecated (no-op) in 2.8.
+  - Static-first (PHPCompatibility + PHPStan ≤ 5 + Rector D) would have identified 16/20 items before
+    running anything and fixed 8. Runtime-only: G01, G03, G17, G18, most of G19, and Slim's handler (5.1).
+- One estimate was wrong and is corrected: Rector config A fixes 5 items (measured by applying it),
+  not the 6 I first wrote from the dry-run rule list.
+- Category: tooling. Time: 45 min (mostly tool setup and two from-scratch reruns).
