@@ -229,3 +229,16 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
   which is null-safe and silent.
 - After: all 7 smoke checks PASS; phpunit still fatal (5.3).
 - Category: app-code. Time: 4 min.
+
+#### 5.3 PHPUnit 11: `setUp()` must return `void` — 06:05Z
+- Command: harness run after 5.2 (phpunit step).
+- Error: `PHP Fatal error: Declaration of CurlClientTest::setUp() must be compatible with
+  PHPUnit\Framework\TestCase::setUp(): void in /app/tests/unit/CurlClient_Test.php on line 8`.
+  Note it fatals although the `--filter` excludes CurlClient: PHPUnit loads every test file
+  before it filters.
+- Root cause: PHPUnit 8+ declares `protected function setUp(): void`.
+- Fix: `tests/unit/{CurlClient,JiraClient}_Test.php` → `protected function setUp(): void`.
+- After: `Class Contact_Test cannot be found in /app/tests/unit/Contact_Test.php` (×3),
+  `No tests executed!` (5.4); `PHP Deprecated: CurlClient::get(): Implicitly marking parameter
+  $params as nullable` (5.5).
+- Category: tests. Time: 2 min.

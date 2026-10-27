@@ -10,7 +10,7 @@ class JiraClientTest extends \PHPUnit\Framework\TestCase {
     const JIRA_PASSWORD = 'credentials';
     const JIRA_PROXY    = '';
 
-    public function setUp() {
+    protected function setUp(): void {
         // create a mock curl client
         $this->curl_client = $this->createMock('CurlClient', array('get'));
         $this->jira_client = new JiraClient(
