@@ -13,7 +13,8 @@
 #   DB_IMAGE         MariaDB image                        (default mariadb:10.4)
 #   DB_PORT          host port for MariaDB                (default 33306)
 #   APP_PORT         host port for the dev server         (default 8000)
-#   ERROR_REPORTING  error_reporting for server + phpunit (default E_ALL)
+#   ERROR_REPORTING  error_reporting for the dev server (default E_ALL & ~E_DEPRECATED)
+#   TEST_ERROR_REPORTING  error_reporting for phpunit (default E_ALL)
 #   MIN_PHP          runtime policy: fail if PHP_VERSION < this (default 8.4.27)
 #   PHPUNIT_FILTER   phpunit --filter (default excludes the flaky httpbin CurlClient tests)
 #   COMPOSER_ARGS    extra args for composer install (e.g. --prefer-source)
@@ -26,7 +27,10 @@ PHP_IMAGE="${PHP_IMAGE:-morgue-php:local}"
 DB_IMAGE="${DB_IMAGE:-mariadb:10.4}"
 DB_PORT="${DB_PORT:-33306}"
 APP_PORT="${APP_PORT:-8000}"
-ERROR_REPORTING="${ERROR_REPORTING:-E_ALL}"
+# Server: same as docker/php/morgue.ini (vendor Slim 2 deprecations accepted, see JOURNAL).
+# phpunit: always full E_ALL (tests load app code only, no Slim).
+ERROR_REPORTING="${ERROR_REPORTING:-E_ALL & ~E_DEPRECATED}"
+TEST_ERROR_REPORTING="${TEST_ERROR_REPORTING:-E_ALL}"
 MIN_PHP="${MIN_PHP:-8.4.27}"
 PHPUNIT_FILTER="${PHPUNIT_FILTER:-/^(?!.*CurlClient)/}"
 COMPOSER_ARGS="${COMPOSER_ARGS:-}"
@@ -172,8 +176,8 @@ if [[ "$id" =~ ^[0-9]+$ ]]; then
 fi
 
 # Rendered pages must not carry PHP error text either (display_errors=On).
-if grep -lE '(Fatal error|Warning|Notice|Deprecated|Parse error)</b>:|Uncaught ' "$OUT"/*.body >/dev/null 2>&1; then
-  bad "PHP error text in responses: $(grep -lE '(Fatal error|Warning|Notice|Deprecated|Parse error)</b>:|Uncaught ' "$OUT"/*.body | xargs -n1 basename | tr '\n' ' ')"
+if grep -lE '(Fatal error|Warning|Notice|Deprecated|Parse error)</b>:|Uncaught |Slim Application Error' "$OUT"/*.body >/dev/null 2>&1; then
+  bad "PHP error text in responses: $(grep -lE '(Fatal error|Warning|Notice|Deprecated|Parse error)</b>:|Uncaught |Slim Application Error' "$OUT"/*.body | xargs -n1 basename | tr '\n' ' ')"
 else ok "no PHP error text in responses"; fi
 
 sleep 0.5
@@ -183,8 +187,8 @@ if grep -E 'PHP (Fatal|Parse|Warning|Notice|Deprecated|Recoverable)|Uncaught' "$
 else ok "PHP log clean (fatals/warnings/notices/deprecations)"; fi
 
 # --- 7. unit tests -----------------------------------------------------------
-log "phpunit (filter: $PHPUNIT_FILTER)"
-if php_run php -d error_reporting="$ERROR_REPORTING" vendor/bin/phpunit --include-path=phplib \
+log "phpunit (filter: $PHPUNIT_FILTER, error_reporting=$TEST_ERROR_REPORTING)"
+if php_run php -d error_reporting="$TEST_ERROR_REPORTING" vendor/bin/phpunit --include-path=phplib \
      --filter "$PHPUNIT_FILTER" tests/unit/ > "$OUT/phpunit.log" 2>&1; then
   ok "phpunit: $(grep -E '^(OK|Tests:)' "$OUT/phpunit.log" | tail -1)"
 else

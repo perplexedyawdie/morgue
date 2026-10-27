@@ -12,6 +12,7 @@ RUN update-ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && docker-php-ext-install -j"$(nproc)" pdo_mysql
 
+COPY docker/php/morgue.ini /usr/local/etc/php/conf.d/zz-morgue.ini
 COPY --from=composer:2.10.3 /usr/bin/composer /usr/local/bin/composer
 ENV COMPOSER_ALLOW_SUPERUSER=1
 

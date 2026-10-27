@@ -169,3 +169,46 @@ Entry format: commands → exact error → root cause → fix → category
   calls inside `namespace Slim\Http` fall back to the global function, so no vendor edit is
   needed. Whether it suffices is decided in step 5.
 - Category: dependency. Time: 15 min (most of it waiting on git clones).
+
+### 5. Fix loop
+Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
+
+#### 5.1 Slim 2 vendor deprecations are fatal under Slim's own error handler — 05:59Z
+- Command: `SKIP_BUILD=1 docs/php84-spike/harness/run.sh` (first full run on the new deps).
+- Error: `GET /ping` body starts with `Deprecated: Return type of Slim\Helper\Set::offsetExists($offset)
+  should either be compatible with ArrayAccess::offsetExists(mixed $offset): bool, or the
+  #[\ReturnTypeWillChange] attribute should be used …`; PHP log (90 lines) has
+  `PHP Fatal error: During inheritance of ArrayAccess: Uncaught ErrorException: Return type of
+  Slim\Http\Response::offsetExists($offset) …` and then `session_set_save_handler(): Session save
+  handler cannot be changed after headers have already been sent` warnings; `POST /events`
+  returned 200 instead of a redirect.
+- Root cause: `Slim::run()` (Slim.php:1291) installs `Slim::handleErrors()`, which throws
+  `ErrorException` for every level enabled in `error_reporting()` (Slim.php:1404-1411). Slim
+  2.6.3's own PHP 8.1 deprecations (ArrayAccess/Countable/IteratorAggregate without return
+  types) and its 8.4 deprecation (`session_set_save_handler()` with callables,
+  SessionCookie.php:94) therefore become fatal, not just noisy. Classes loaded before `run()`
+  only print the deprecation; that early output then breaks `session_*()` header calls.
+- Fix (runtime config only, as allowed for vendor code): `docker/php/morgue.ini` → baked into
+  the image as `conf.d/zz-morgue.ini`: `error_reporting = E_ALL & ~E_DEPRECATED`,
+  display_errors Off, log_errors On. The harness server uses the same level; phpunit keeps
+  full `E_ALL` (tests load only app code). The harness now also fails on Slim's
+  "Slim Application Error" page.
+- **Accepted vendor deprecations (slim/slim 2.6.3, suppressed by the line above):**
+  1. `Slim\Helper\Set::{offsetExists,offsetGet,offsetSet,offsetUnset,getIterator,count}` — 8.1 return types
+  2. `Slim\Environment::{offsetExists,offsetGet,offsetSet,offsetUnset}` — 8.1 return types
+  3. `Slim\Middleware\Flash::{offsetExists,offsetGet,offsetSet,offsetUnset,getIterator,count}` — 8.1
+  4. `Slim\Http\Response::{offsetExists,offsetGet,offsetSet,offsetUnset,getIterator,count}` — 8.1
+  5. `Slim\Http\Headers` / `Slim\Http\Cookies` (extend Set) — inherited, same as 1
+  6. `Slim\Middleware\SessionCookie` line 94: `session_set_save_handler()` with individual
+     callbacks — 8.4
+- Side effect to know about: with Slim's handler in place, `~E_DEPRECATED` also silences app
+  deprecations at runtime in the web path (the handler returns without logging). App
+  deprecations are therefore hunted with phpunit at E_ALL, `php -l` and the static scan instead.
+- Slim strategy result: **option 1 (app-level polyfill) works.** `get_magic_quotes_gpc()` and
+  the mcrypt constants are resolved from `phplib/compat/slim2_php8.php` (`POST /events` read its
+  input and the row was persisted). Options 2 (composer-patches) and 3 (fork) were not needed;
+  they would only be required to *fix* (rather than suppress) the deprecations above, or if a
+  removed function were called fully-qualified or a removed class/syntax were used.
+- After the fix: /ping, /, POST /events, DB row PASS; `GET /events/1` → 500 (5.2); phpunit
+  fatal (5.3).
+- Category: framework-vendor. Time: 6 min.
