@@ -319,3 +319,17 @@ Harness at `error_reporting=E_ALL`, display_errors + log_errors on.
 - Fix: `phplib/CurlClient.php:5` → `?array $params = null`. Same accepted values as before.
 - Verification: `php -d error_reporting=E_ALL -l phplib/CurlClient.php` → "No syntax errors", no deprecation.
 - Category: app-code. Time: 1 min.
+
+#### 5.10 `Persistence::get_array()`: optional-before-required (8.0) and `E_USER_ERROR` (8.4) — 06:19Z
+- Error: `PHP Deprecated: Persistence::get_array(): Optional parameter $where declared before
+  required parameter $table_name is implicitly treated as a required parameter in
+  /app/phplib/Persistence.php on line 230` (compile time); static scan P7: `Passing E_USER_ERROR
+  to trigger_error() is deprecated since 8.4` (line 251).
+- Root cause: the `= array()` default on `$where` was never usable (8 callers all pass 4 args,
+  some pass `null`, which the body already normalises); 8.4 deprecates `E_USER_ERROR`.
+- Fix: drop the dead default (`$where` without default, same effective signature);
+  `trigger_error(..., E_USER_ERROR)` → `throw new InvalidArgumentException(...)`. Same outcome
+  as before: under Slim's handler E_USER_ERROR already became a thrown ErrorException; outside
+  Slim both halt the script.
+- Verification: `php -d error_reporting=E_ALL -l phplib/Persistence.php` → clean.
+- Category: app-code. Time: 2 min.

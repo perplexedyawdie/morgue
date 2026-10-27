@@ -227,7 +227,7 @@ class Persistence {
      * @returns ( "status" => self::OK, "error" => "", "values" => array(values) ) on success
      * and ( "status" => self::ERROR, "error" => "message", "values" => array() ) on failure
      */
-    static function get_array($columns, $where = array(), $table_name, $conn = null) {
+    static function get_array($columns, $where, $table_name, $conn = null) {
         if (!$where) {
             $where = array();
         }
@@ -248,7 +248,7 @@ class Persistence {
             }
         } elseif ($table_name == 'tags') {
             if (!isset($where['tag_ids'])) {
-                trigger_error('Call to get_array() for "tags" table was missing tag_ids', E_USER_ERROR);
+                throw new InvalidArgumentException('Call to get_array() for "tags" table was missing tag_ids');
             }
 
             $tags = array();
